@@ -6,8 +6,8 @@ android_binary(
     name = "TfLiteCameraDemo",
     srcs = glob(["java/**/*.java"]),
     assets = [
-        "@tflite_mobilenet//:labels.txt",
-        "@tflite_mobilenet//:mobilenet_quant_v1_224.tflite",
+        "@tflite_mobilenet_float//:labels.txt",
+        "@tflite_mobilenet_float//:mobilenet_v1_1.0_224.tflite",
     ],
     assets_dir = "",
     custom_package = "com.example.android.tflitecamerademo",
