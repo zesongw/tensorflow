@@ -43,6 +43,8 @@ cc_library(
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/delegates/nnapi:nnapi_delegate",
         "//tensorflow/lite/tools/delegates:delegate_provider_hdr",
+        "//tensorflow/lite/delegates/xnnpack:xnnpack_delegate",
+        "//tensorflow/lite/delegates/webnn:webnn_delegate",
     ] + select({
         "//tensorflow/lite/delegates/gpu:supports_gpu_delegate": [
             "//tensorflow/lite/delegates/gpu:delegate",

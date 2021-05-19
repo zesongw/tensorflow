@@ -69,6 +69,10 @@ option(TFLITE_ENABLE_GPU "Enable GPU" OFF)
 option(TFLITE_ENABLE_METAL "Enable Metal delegate (iOS only)" OFF)
 option(TFLITE_ENABLE_XNNPACK "Enable XNNPACK backend" ON)
 option(TFLITE_ENABLE_EXTERNAL_DELEGATE "Enable External Delegate backend" ON)
+<<<<<<< HEAD
+=======
+option(TFLITE_ENABLE_WEBNN "Enable WebNN backend" ON)
+>>>>>>> 4ab1a98237a (The initial commit of WebNN delegate)
 
 option(TFLITE_KERNEL_TEST "Enable tflite kernel unit test" OFF)
 if(TFLITE_KERNEL_TEST AND ${CMAKE_CROSSCOMPILING})
@@ -399,6 +403,17 @@ if(TFLITE_ENABLE_XNNPACK)
   )
   list(APPEND TFLITE_TARGET_PUBLIC_OPTIONS "-DTFLITE_BUILD_WITH_XNNPACK_DELEGATE")
 endif()
+if(TFLITE_ENABLE_WEBNN)
+  include_directories(
+    "$ENV{WEBNN_NATIVE_DIR}/out/Release/gen/src/include"
+    "$ENV{WEBNN_NATIVE_DIR}/src/include"
+  )
+  populate_tflite_source_vars("delegates/webnn"
+    TFLITE_DELEGATES_WEBNN_SRCS
+    FILTER ".*(_test|_tester)\\.(cc|h)"
+  )
+  list(APPEND TFLITE_TARGET_PUBLIC_OPTIONS "-DTFLITE_BUILD_WITH_WEBNN_DELEGATE")
+endif()
 if(TFLITE_ENABLE_EXTERNAL_DELEGATE)
   populate_tflite_source_vars("delegates/external"
     TFLITE_DELEGATES_EXTERNAL_SRCS
@@ -475,6 +490,7 @@ add_library(tensorflow-lite
   ${TFLITE_DELEGATES_SRCS}
   ${TFLITE_DELEGATES_XNNPACK_SRCS}
   ${TFLITE_DELEGATES_EXTERNAL_SRCS}
+  ${TFLITE_DELEGATES_WEBNN_SRCS}
   ${TFLITE_EXPERIMENTAL_RESOURCE_SRCS}
   ${TFLITE_EXPERIMENTAL_RUY_PROFILER_SRCS}
   ${TFLITE_EXPERIMENTAL_RUY_SRCS}

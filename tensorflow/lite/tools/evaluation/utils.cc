@@ -188,5 +188,19 @@ TfLiteDelegatePtr CreateXNNPACKDelegate(int num_threads) {
   return CreateXNNPACKDelegate(&opts);
 }
 #endif
+
+TfLiteDelegatePtr CreateWebNNDelegate(int device) {
+#if defined(TFLITE_WITHOUT_WEBNN)
+  return CreateNullDelegate();
+#else
+  TfLiteWebNNDelegateOptions options =
+      TfLiteWebNNDelegateOptionsDefault();
+  options.devicePreference = device;
+  auto webnn_delegate = TfLiteWebNNDelegateCreate(&options);
+  return TfLiteDelegatePtr(webnn_delegate, [](TfLiteDelegate* delegate) {
+    TfLiteWebNNDelegateDelete(delegate);
+  });
+#endif
+}
 }  // namespace evaluation
 }  // namespace tflite

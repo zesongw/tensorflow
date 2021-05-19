@@ -129,6 +129,17 @@ class DelegateProviders {
         params_.Set<bool>("num_threads", s.number_of_threads);
       }
     }
+
+    // Parse settings related to WebNN delegate.
+    if (s.webnn_delegate) {
+      if (!params_.HasParam("use_webnn")) {
+        LOG(WARN) << "WebNN deleate execution provider isn't linked or "
+                     "WebNN delegate isn't supported on the platform!";
+      } else {
+        params_.Set<bool>("use_webnn", true);
+        params_.Set<int>("webnn_device", s.webnn_device);
+      }
+    }
   }
 
   // Create a list of TfLite delegates based on what have been initialized (i.e.
@@ -215,6 +226,9 @@ void RunInference(Settings* settings,
   LOG(INFO) << "resolved reporter";
 
   tflite::ops::builtin::BuiltinOpResolver resolver;
+
+  static TfLiteRegistration reg = {nullptr, nullptr, nullptr, nullptr};
+  resolver.AddCustom("Convolution2DTransposeBias", &reg);
 
   tflite::InterpreterBuilder(*model, resolver)(&interpreter);
   if (!interpreter) {
@@ -420,6 +434,8 @@ void display_usage(const DelegateProviders& delegate_providers) {
       << "\t--verbose, -v: [0|1] print more information\n"
       << "\t--warmup_runs, -w: number of warmup runs\n"
       << "\t--xnnpack_delegate, -x [0:1]: xnnpack delegate\n"
+      << "\t--webnn_delegate, -n [0|1]: webnn delegate (on|off)\n"
+      << "\t--webnn_device, -d [0|1|2]: webnn device (default|gpu|cpu) \n";
       << "\t--help, -h: Print this help message\n";
 }
 
@@ -455,12 +471,14 @@ int Main(int argc, char** argv) {
         {"hexagon_delegate", required_argument, nullptr, 'j'},
         {"xnnpack_delegate", required_argument, nullptr, 'x'},
         {"help", no_argument, nullptr, 'h'},
+        {"webnn_delegate", required_argument, nullptr, 'n'},
+        {"webnn_device", required_argument, nullptr, 'd'},
         {nullptr, 0, nullptr, 0}};
 
     /* getopt_long stores the option index here. */
     int option_index = 0;
 
-    c = getopt_long(argc, argv, "a:b:c:d:e:f:g:i:j:l:m:p:r:s:t:v:w:x:h",
+    c = getopt_long(argc, argv, "a:b:c:d:e:f:g:i:j:l:m:p:r:s:t:v:w:x:n:d:h",
                     long_options, &option_index);
 
     /* Detect the end of the options. */
@@ -526,6 +544,14 @@ int Main(int argc, char** argv) {
         break;
       case 'x':
         s.xnnpack_delegate =
+            strtol(optarg, nullptr, 10);  // NOLINT(runtime/deprecated_fn)
+        break;
+      case 'n':
+        s.webnn_delegate =
+            strtol(optarg, nullptr, 10);  // NOLINT(runtime/deprecated_fn)
+        break;
+      case 'd':
+        s.webnn_device =
             strtol(optarg, nullptr, 10);  // NOLINT(runtime/deprecated_fn)
         break;
       case 'h':
