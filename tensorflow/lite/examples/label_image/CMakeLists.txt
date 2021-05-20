@@ -40,6 +40,18 @@ else()
   set(TFLITE_LABEL_IMAGE_CC_OPTIONS "-DTFLITE_WITHOUT_XNNPACK")
 endif()  # TFLITE_ENABLE_XNNPACK
 
+if(TFLITE_ENABLE_WEBNN)
+  list(APPEND TFLITE_LABEL_IMAGE_SRCS
+    ${TFLITE_SOURCE_DIR}/tools/delegates/webnn_delegate_provider.cc
+  )
+  list(APPEND TFLITE_LABEL_IMAGE_SRCS "~/code/webnn-native/out/openvino/gen/src/webnn/webnn_cpp.cpp")
+  link_directories(
+    "~/code/webnn-native/out/openvino"
+  )
+else()
+  set(TFLITE_LABEL_IMAGE_CC_OPTIONS "-DTFLITE_WITHOUT_WEBNN")
+endif()  # TFLITE_ENABLE_WEBNN
+
 if(CMAKE_SYSTEM_NAME MATCHES "Android")
   if(_TFLITE_ENABLE_NNAPI)
     list(APPEND TFLITE_LABEL_IMAGE_SRCS
@@ -64,4 +76,6 @@ target_compile_options(label_image
 )
 target_link_libraries(label_image
   tensorflow-lite
+  webnn_native
+  webnn_proc
 )

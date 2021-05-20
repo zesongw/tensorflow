@@ -39,6 +39,10 @@ limitations under the License.
 #include "tensorflow/lite/delegates/xnnpack/xnnpack_delegate.h"
 #endif
 
+#if !defined(TFLITE_WITHOUT_WEBNN)
+#include "tensorflow/lite/delegates/webnn/webnn_delegate.h"
+#endif
+
 #include "tensorflow/lite/c/common.h"
 
 namespace tflite {
@@ -89,6 +93,9 @@ TfLiteDelegatePtr CreateXNNPACKDelegate(
     const TfLiteXNNPackDelegateOptions* options);
 #endif
 TfLiteDelegatePtr CreateXNNPACKDelegate(int num_threads);
+
+TfLiteDelegatePtr CreateWebNNDelegate();
+
 }  // namespace evaluation
 }  // namespace tflite
 

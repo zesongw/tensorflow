@@ -27,10 +27,11 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "include/webnn/webnn_cpp.h"
-#include "include/webnn/webnn_proc.h>
-#include "include/webnn_native/WebnnNative.h>
+#include <webnn/webnn_cpp.h>
+#include <webnn/webnn_proc.h>
+#include <webnn_native/WebnnNative.h>
 
+#include <fp16/fp16.h>
 #include "tensorflow/lite/builtin_ops.h"
 #include "tensorflow/lite/c/builtin_op_data.h"
 #include "tensorflow/lite/c/common.h"
@@ -114,7 +115,7 @@ class Subgraph {
       TF_LITE_KERNEL_LOG(context, "Failed to create WebNN context.");
       return nullptr;
     }
-    ml::CreateGraphBuilder ml_builder = ml::CreateGraphBuilder(ml_context)
+    ml::GraphBuilder ml_builder = ml::CreateGraphBuilder(ml_context);
     if (!ml_builder) {
       TF_LITE_KERNEL_LOG(context, "Failed to create WebNN graph builder.");
       return nullptr;
@@ -195,7 +196,7 @@ class Subgraph {
         default:
           TF_LITE_KERNEL_LOG(
               context,
-              "unsupported datatype (%s) of tensor %d in XNNPACK delegate",
+              "unsupported datatype (%s) of tensor %d in WebNN delegate",
               TfLiteTypeGetName(context->tensors[t].type), t);
           return nullptr;
       }
@@ -225,13 +226,12 @@ class Subgraph {
         if (data == nullptr) {
           compute_inputs.insert(t);
           std::string name = std::to_string(t);
-          operand = ml_builder.Input(name, &desc);
+          operand = ml_builder.Input(name.c_str(), &desc);
         } else {
           operand = ml_builder.Constant(&desc, data, context->tensors[t].bytes);
         }
+        webnn_operands[t] = operand;
       }
-      
-      webnn_operands[t] = operand;
     }
 
     // Create a set of quasi-static tensors for VisitNode function
@@ -257,7 +257,7 @@ class Subgraph {
         return nullptr;
       }
 
-      if (VisitNode(subgraph.get(), context, registration, node, node_index,
+      if (VisitNode(ml_builder, context, registration, node, node_index,
                     quasi_static_tensors, webnn_operands) != kTfLiteOk) {
         return nullptr;
       }
@@ -282,53 +282,34 @@ class Subgraph {
 
   TfLiteStatus Invoke(TfLiteContext* context) {
     std::vector<ml::Input> ml_inputs;
-    ml::NamedInputs inputs = ml::CreateNamedInputs();
+    ml::NamedInputs named_inputs = ml::CreateNamedInputs();
     for (int t : inputs_) {
       ml::Input ml_input;
       ml_input.buffer = context->tensors[t].data.raw;
       ml_input.size = context->tensors[t].bytes;
       std::string name = std::to_string(t);
       ml_inputs.push_back(ml_input);
-      inputs.Set(name.c_str, &(ml_inputs.back()));
+      named_inputs.Set(name.c_str(), &(ml_inputs.back()));
     }
 
     std::vector<ml::Output> ml_outputs;
-    ml::NamedOutputs outputs = ml::CreateNamedOutputs();
+    ml::NamedOutputs named_outputs = ml::CreateNamedOutputs();
     for (int t : outputs_) {
       ml::Output ml_output;
       ml_output.buffer = context->tensors[t].data.raw;
       ml_output.size = context->tensors[t].bytes;
       std::string name = std::to_string(t);
-      named_outputs.push_back(ml_input);
-      outputs.Set(name.c_str, &(named_outputs.back()));
+      ml_outputs.push_back(ml_output);
+      named_outputs.Set(name.c_str(), &(ml_outputs.back()));
     }
 
-    ml::ComputeGraphStatus status = ml_graph_.ComputeSync(inputs, outputs);
+    ml::ComputeGraphStatus status = ml_graph_.ComputeSync(named_inputs, named_outputs);
     if (status != ml::ComputeGraphStatus::Success) {
       TF_LITE_KERNEL_LOG(context, "failed to compute WebNN graph");
       return kTfLiteError;
     }
 
     return kTfLiteOk;
-  }
-
-  static TfLiteStatus CalculatePadding(TfLiteContext* context,
-                                       TfLitePadding padding, uint32_t* flags,
-                                       int node_index) {
-    switch (padding) {
-      case kTfLitePaddingSame: {
-        *flags = XNN_FLAG_TENSORFLOW_SAME_PADDING;
-        return kTfLiteOk;
-      }
-      case kTfLitePaddingValid:
-        *flags = 0;
-        return kTfLiteOk;
-      default:
-        TF_LITE_MAYBE_KERNEL_LOG(context,
-                                 "invalid padding mode (%d) in node #%d",
-                                 static_cast<int>(padding), node_index);
-        return kTfLiteError;
-    }
   }
 
   static TfLiteStatus ConvertActivationToOutputRange(
@@ -871,13 +852,13 @@ class Subgraph {
       ml::GraphBuilder builder, TfLiteContext* context,
       TfLiteRegistration* registration, TfLiteNode* node, int node_index,
       const std::unordered_set<int>& quasi_static_tensors,
-      const std::vector<ml::Operand>& webnn_operands) {
+      std::vector<ml::Operand>& webnn_operands) {
     // TFLite context used for logging purposes. When we create a new node
     // (subgraph is non-null), logging context is the same as context, and error
     // messages are passed to TFLite. When we detect supported operations
     // (subgraph is null), logging context is null, and error messages are
     // supressed.
-    TfLiteContext* logging_context = subgraph == nullptr ? nullptr : context;
+    TfLiteContext* logging_context = builder == nullptr ? nullptr : context;
     switch (registration->builtin_code) {
       case kTfLiteBuiltinAdd: {
         const TfLiteAddParams* add_params =
@@ -895,7 +876,7 @@ class Subgraph {
       ml::GraphBuilder builder, TfLiteContext* logging_context, int node_index,
       TfLiteNode* node, const TfLiteTensor* tensors,
       const TfLiteAddParams* add_params,
-      const std::vector<ml::Operand>& webnn_operands) {
+      std::vector<ml::Operand>& webnn_operands) {
     TF_LITE_ENSURE_STATUS(
         CheckNumInputsAndOutputs(logging_context, node, 2, 1, node_index));
 
@@ -919,7 +900,7 @@ class Subgraph {
 
     if (builder) {
       ml::Operand output =
-        builder.Add(webnn_operands[node->inputs->data[0]], ebnn_operands[node->inputs->data[1]]);
+        builder.Add(webnn_operands[node->inputs->data[0]], webnn_operands[node->inputs->data[1]]);
 
       float output_min = -std::numeric_limits<float>::infinity();
       float output_max = +std::numeric_limits<float>::infinity();
@@ -939,7 +920,6 @@ class Subgraph {
         options.minValue = minValue;
         output = builder.Clamp(output, &options);
       }
-
       webnn_operands[node->outputs->data[0]] = output;
     }
 
@@ -1052,9 +1032,11 @@ TfLiteIntArray* Delegate::PrepareOpsToDelegate(TfLiteContext* context) {
       }
     }
 
-    if (Subgraph::VisitNode(ml::GraphBuilder(), context, registration, node,
+    ml::GraphBuilder null_builder;
+    std::vector<ml::Operand> empty_webnn_operands;
+    if (Subgraph::VisitNode(null_builder, context, registration, node,
                             node_index, quasi_static_tensors,
-                            std::vector<ml::Operand>()) != kTfLiteOk) {
+                            empty_webnn_operands) != kTfLiteOk) {
       // If a non-delegated node consumes output of a node that unpacks static
       // data, that node shouldn't be delegated.
       for (int j = 0; j < node->inputs->size; j++) {
@@ -1158,10 +1140,6 @@ TfLiteIntArray* Delegate::PrepareOpsToDelegate(TfLiteContext* context) {
       }
     }
 
-    // Align to XNN_EXTRA_BYTES bytes
-    while (static_unpacked_data_.size() % XNN_EXTRA_BYTES != 0) {
-      static_unpacked_data_.push_back(0);
-    }
     const size_t tensor_offset = static_unpacked_data_.size();
     static_unpacked_data_.resize(tensor_offset + context->tensors[t].bytes);
 
@@ -1289,7 +1267,7 @@ void* SubgraphInit(TfLiteContext* context, const char* buffer, size_t length) {
 
   return static_cast<void*>(Subgraph::Create(
       context, params,
-      static_cast<::tflite::xnnpack::Delegate*>(params->delegate->data_)));
+      static_cast<::tflite::webnn::Delegate*>(params->delegate->data_)));
 }
 
 TfLiteStatus SubgraphPrepare(TfLiteContext* context, TfLiteNode* node) {
