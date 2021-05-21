@@ -50,9 +50,8 @@ void WebNNDelegateProvider::LogParams(const ToolParams& params,
 
 TfLiteDelegatePtr WebNNDelegateProvider::CreateTfLiteDelegate(
     const ToolParams& params) const {
-  if (params.Get<bool>("use_xnnpack")) {
-    return evaluation::CreateXNNPACKDelegate(
-        params.Get<int32_t>("num_threads"));
+  if (params.Get<bool>("use_webnn")) {
+    return evaluation::CreateWebNNDelegate();
   }
   return TfLiteDelegatePtr(nullptr, [](TfLiteDelegate*) {});
 }
