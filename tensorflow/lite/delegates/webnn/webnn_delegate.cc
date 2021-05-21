@@ -242,6 +242,8 @@ class Subgraph {
     }
 
     // Create WebNN nodes for TFLite delegate nodes
+    // keep the buffers of constants created during graph building.
+    std::vector<std::unique_ptr<char>> constant_buffers;
     for (int i = 0; i < params->nodes_to_replace->size; i++) {
       const int node_index = params->nodes_to_replace->data[i];
       if (delegate->static_unpack_nodes_.count(node_index)) {
@@ -258,7 +260,7 @@ class Subgraph {
       }
 
       if (VisitNode(ml_builder, context, registration, node, node_index,
-                    quasi_static_tensors, webnn_operands) != kTfLiteOk) {
+                    quasi_static_tensors, webnn_operands, constant_buffers) != kTfLiteOk) {
         return nullptr;
       }
     }
@@ -306,45 +308,21 @@ class Subgraph {
     return kTfLiteOk;
   }
 
-  static TfLiteStatus ConvertActivationToOutputRange(
-      TfLiteContext* context, int node_index, TfLiteFusedActivation activation,
-      float* output_min, float* output_max) {
-    switch (activation) {
-      case kTfLiteActNone:
-        *output_min = -std::numeric_limits<float>::infinity();
-        *output_max = +std::numeric_limits<float>::infinity();
+  static TfLiteStatus CalculatePadding(TfLiteContext* context,
+                                       TfLitePadding padding, ml::AutoPad& auto_pad,
+                                       int node_index) {
+    switch (padding) {
+      case kTfLitePaddingSame: {
+        auto_pad = ml::AutoPad::SameUpper;
         return kTfLiteOk;
-      case kTfLiteActRelu:
-        *output_min = 0.0f;
-        *output_max = +std::numeric_limits<float>::infinity();
+      }
+      case kTfLitePaddingValid:
+        auto_pad = ml::AutoPad::Explicit;
         return kTfLiteOk;
-      case kTfLiteActReluN1To1:
-        *output_min = -1.0f;
-        *output_max = +1.0f;
-        return kTfLiteOk;
-      case kTfLiteActRelu6:
-        *output_min = 0.0f;
-        *output_max = 6.0f;
-        return kTfLiteOk;
-      case kTfLiteActTanh:
-        TF_LITE_MAYBE_KERNEL_LOG(
-            context, "unsupported fused activation (Tanh) in node #%d",
-            node_index);
-        return kTfLiteError;
-      case kTfLiteActSignBit:
-        TF_LITE_MAYBE_KERNEL_LOG(
-            context, "unsupported fused activation (Sign) in node #%d",
-            node_index);
-        return kTfLiteError;
-      case kTfLiteActSigmoid:
-        TF_LITE_MAYBE_KERNEL_LOG(
-            context, "unsupported fused activation (Sigmoid) in node #%d",
-            node_index);
-        return kTfLiteError;
       default:
         TF_LITE_MAYBE_KERNEL_LOG(context,
-                                 "invalid fused activation (%d) in node #%d",
-                                 static_cast<int>(activation), node_index);
+                                 "invalid padding mode (%d) in node #%d",
+                                 static_cast<int>(padding), node_index);
         return kTfLiteError;
     }
   }
@@ -842,11 +820,79 @@ class Subgraph {
     return kTfLiteOk;
   }
 
+  static ml::Operand BuildClamp(
+      const ml::GraphBuilder& builder, const ml::Operand& input,
+      float min_value, float max_value, std::vector<std::unique_ptr<char>>& constant_buffers) {
+    std::unique_ptr<char> min_buffer(new char[sizeof(float)]);
+    *reinterpret_cast<float*>(min_buffer.get()) = min_value;
+    std::unique_ptr<char> max_buffer(new char[sizeof(float)]);
+    *reinterpret_cast<float*>(max_buffer.get()) = max_value;
+    std::vector<int32_t> dims = {1};
+    ml::OperandDescriptor desc = {
+        ml::OperandType::Float32, dims.data(), static_cast<uint32_t>(dims.size())};
+    ml::Operand min_operand = builder.Constant(&desc, min_buffer.get(), sizeof(float));
+    ml::Operand max_operand = builder.Constant(&desc, max_buffer.get(), sizeof(float));
+    ml::ClampOptions options;
+    options.minValue = min_operand;
+    options.maxValue = max_operand;
+    constant_buffers.push_back(std::move(min_buffer));
+    constant_buffers.push_back(std::move(max_buffer));
+    return builder.Clamp(input, &options);
+  }
+
+  static TfLiteStatus VisitActivation(
+      const ml::GraphBuilder& builder, TfLiteContext* context, int node_index,
+      int input_tensor_id, int output_tensor_id, TfLiteFusedActivation activation,
+      std::vector<ml::Operand>& webnn_operands, std::vector<std::unique_ptr<char>>& constant_buffers) {
+    switch (activation) {
+      case kTfLiteActNone:
+        return kTfLiteOk;
+      case kTfLiteActRelu:
+        if (builder) {
+          webnn_operands[output_tensor_id] = builder.Relu(webnn_operands[input_tensor_id]);
+        }
+        return kTfLiteOk;
+      case kTfLiteActReluN1To1:
+        if (builder) {
+          webnn_operands[output_tensor_id] = BuildClamp(
+              builder, webnn_operands[input_tensor_id], -1.0f, +1.0f, constant_buffers);
+        }
+        return kTfLiteOk;
+      case kTfLiteActRelu6:
+        if (builder) {
+          webnn_operands[output_tensor_id] = BuildClamp(
+              builder, webnn_operands[input_tensor_id], 0.0f, 6.0f, constant_buffers);
+        }
+        return kTfLiteOk;
+      case kTfLiteActTanh:
+        TF_LITE_MAYBE_KERNEL_LOG(
+            context, "unsupported fused activation (Tanh) in node #%d",
+            node_index);
+        return kTfLiteError;
+      case kTfLiteActSignBit:
+        TF_LITE_MAYBE_KERNEL_LOG(
+            context, "unsupported fused activation (Sign) in node #%d",
+            node_index);
+        return kTfLiteError;
+      case kTfLiteActSigmoid:
+        TF_LITE_MAYBE_KERNEL_LOG(
+            context, "unsupported fused activation (Sigmoid) in node #%d",
+            node_index);
+        return kTfLiteError;
+      default:
+        TF_LITE_MAYBE_KERNEL_LOG(context,
+                                 "invalid fused activation (%d) in node #%d",
+                                 static_cast<int>(activation), node_index);
+        return kTfLiteError;
+    }
+  }
+
   static TfLiteStatus VisitNode(
-      ml::GraphBuilder builder, TfLiteContext* context,
+      const ml::GraphBuilder& builder, TfLiteContext* context,
       TfLiteRegistration* registration, TfLiteNode* node, int node_index,
       const std::unordered_set<int>& quasi_static_tensors,
-      std::vector<ml::Operand>& webnn_operands) {
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
     // TFLite context used for logging purposes. When we create a new node
     // (subgraph is non-null), logging context is the same as context, and error
     // messages are passed to TFLite. When we detect supported operations
@@ -859,7 +905,15 @@ class Subgraph {
             static_cast<const TfLiteAddParams*>(node->builtin_data);
 
         return VisitAddNode(builder, logging_context, node_index, node,
-                            context->tensors, add_params, webnn_operands);
+                            context->tensors, add_params, webnn_operands, constant_buffers);
+      }
+      case kTfLiteBuiltinConv2d: {
+        const TfLiteConvParams* conv_params =
+            static_cast<const TfLiteConvParams*>(node->builtin_data);
+
+        return VisitConv2DNode(builder, logging_context, node_index, node,
+                               context->tensors, conv_params,
+                               quasi_static_tensors, webnn_operands, constant_buffers);
       }
       default:
         return kTfLiteError;
@@ -867,46 +921,135 @@ class Subgraph {
   }
 
   static TfLiteStatus VisitAddNode(
-      ml::GraphBuilder builder, TfLiteContext* logging_context, int node_index,
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
       TfLiteNode* node, const TfLiteTensor* tensors,
       const TfLiteAddParams* add_params,
-      std::vector<ml::Operand>& webnn_operands) {
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
     TF_LITE_ENSURE_STATUS(
         CheckNumInputsAndOutputs(logging_context, node, 2, 1, node_index));
 
-    const TfLiteTensor& input1_tensor = tensors[node->inputs->data[0]];
+    const int input1_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input1_tensor = tensors[input1_tensor_id];
     TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
-        logging_context, input1_tensor, node->inputs->data[0], node_index));
+        logging_context, input1_tensor, input1_tensor_id, node_index));
     TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
-        logging_context, input1_tensor, node->inputs->data[0], node_index));
+        logging_context, input1_tensor, input1_tensor_id, node_index));
 
-    const TfLiteTensor& input2_tensor = tensors[node->inputs->data[1]];
+    const int input2_tensor_id = node->inputs->data[1];
+    const TfLiteTensor& input2_tensor = tensors[input2_tensor_id];
     TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
-        logging_context, input2_tensor, node->inputs->data[1], node_index));
+        logging_context, input2_tensor, input2_tensor_id, node_index));
     TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
-        logging_context, input2_tensor, node->inputs->data[1], node_index));
+        logging_context, input2_tensor, input2_tensor_id, node_index));
 
-    const TfLiteTensor& output_tensor = tensors[node->outputs->data[0]];
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
     TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
-        logging_context, output_tensor, node->outputs->data[0], node_index));
+        logging_context, output_tensor, output_tensor_id, node_index));
     TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
-        logging_context, output_tensor, node->outputs->data[0], node_index));
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    if (builder) {
+      webnn_operands[output_tensor_id] =
+          builder.Add(webnn_operands[input1_tensor_id], webnn_operands[input2_tensor_id]);
+    }
 
     if (add_params != nullptr) {
-      if (add_params->activation != kTfLiteActNone) {
-        TF_LITE_MAYBE_KERNEL_LOG(
-            logging_context,
-            "activation type #%d in node #%d is not supported.",
-            add_params->activation, node_index);
-        return kTfLiteError;
+      TF_LITE_ENSURE_STATUS(VisitActivation(
+          builder, logging_context, node_index, output_tensor_id, output_tensor_id,
+          add_params->activation, webnn_operands, constant_buffers));
+    }
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitConv2DNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteConvParams* conv_params,
+      const std::unordered_set<int>& quasi_static_tensors,
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
+    TF_LITE_ENSURE_STATUS(
+        CheckConvolutionParams(logging_context, conv_params, node_index));
+
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 3, 1, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, input_tensor, 4,
+                                           input_tensor_id));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int filter_tensor_id = node->inputs->data[1];
+    const TfLiteTensor& filter_tensor = tensors[filter_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, filter_tensor, filter_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, filter_tensor, 4,
+                                           filter_tensor_id));
+    if (quasi_static_tensors.count(filter_tensor_id) == 0) {
+      TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+          logging_context, filter_tensor, filter_tensor_id, node_index));
+    }
+
+    const int bias_tensor_id = node->inputs->data[2];
+    // bias_tensor_id < 0 means without bias.
+    if (bias_tensor_id >= 0) {
+      const TfLiteTensor& bias_tensor = tensors[bias_tensor_id];
+      TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt32Type(
+          logging_context, bias_tensor, node->inputs->data[2], node_index));
+      TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, bias_tensor, 1,
+                                            node->inputs->data[2]));
+      if (quasi_static_tensors.count(node->inputs->data[2]) == 0) {
+        TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+            logging_context, bias_tensor, node->inputs->data[2], node_index));
       }
     }
 
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, output_tensor, 4,
+                                           output_tensor_id));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    ml::AutoPad auto_pad;
+    TF_LITE_ENSURE_STATUS(CalculatePadding(
+        logging_context, conv_params->padding, auto_pad, node_index));
+
     if (builder) {
+      ml::Conv2dOptions options;
+      options.autoPad = auto_pad;
+      std::vector<int32_t> strides = {
+          conv_params->stride_height, conv_params->stride_width};
+      options.strides = strides.data();
+      options.stridesCount = strides.size();
+      std::vector<int32_t> dilations = {
+          conv_params->dilation_height_factor, conv_params->dilation_width_factor};
+      options.dilations = dilations.data();
+      options.dilationsCount = dilations.size();
+      options.inputLayout = ml::InputOperandLayout::Nhwc;
+      options.filterLayout = ml::FilterOperandLayout::Ohwi;
       ml::Operand output =
-        builder.Add(webnn_operands[node->inputs->data[0]], webnn_operands[node->inputs->data[1]]);
-      webnn_operands[node->outputs->data[0]] = output;
+          builder.Conv2d(webnn_operands[input_tensor_id], 
+                         webnn_operands[filter_tensor_id],
+                         &options);
+      if (bias_tensor_id >= 0) {
+        output = builder.Add(output, webnn_operands[bias_tensor_id]);
+      }
+      webnn_operands[output_tensor_id] = output;
     }
+
+    TF_LITE_ENSURE_STATUS(VisitActivation(
+          builder, logging_context, node_index, output_tensor_id, output_tensor_id,
+          conv_params->activation, webnn_operands, constant_buffers));
 
     return kTfLiteOk;
   }
@@ -1028,9 +1171,10 @@ TfLiteIntArray* Delegate::PrepareOpsToDelegate(TfLiteContext* context) {
 
     ml::GraphBuilder null_builder;
     std::vector<ml::Operand> empty_webnn_operands;
+    std::vector<std::unique_ptr<char>> empty_buffers;
     if (Subgraph::VisitNode(null_builder, context, registration, node,
                             node_index, quasi_static_tensors,
-                            empty_webnn_operands) != kTfLiteOk) {
+                            empty_webnn_operands, empty_buffers) != kTfLiteOk) {
       // If a non-delegated node consumes output of a node that unpacks static
       // data, that node shouldn't be delegated.
       for (int j = 0; j < node->inputs->size; j++) {
