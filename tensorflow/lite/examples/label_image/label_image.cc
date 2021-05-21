@@ -136,6 +136,16 @@ class DelegateProviders {
         params_.Set<bool>("num_threads", s.number_of_threads);
       }
     }
+
+    // Parse settings related to WebNN delegate.
+    if (s.webnn_delegate) {
+      if (!params_.HasParam("use_webnn")) {
+        LOG(WARN) << "WebNN deleate execution provider isn't linked or "
+                     "WebNN delegate isn't supported on the platform!";
+      } else {
+        params_.Set<bool>("use_webnn", true);
+      }
+    }
   }
 
   // Create a list of TfLite delegates based on what have been initialized (i.e.
@@ -422,7 +432,8 @@ void display_usage() {
       << "--threads, -t: number of threads\n"
       << "--verbose, -v: [0|1] print more information\n"
       << "--warmup_runs, -w: number of warmup runs\n"
-      << "--xnnpack_delegate, -x [0:1]: xnnpack delegate\n";
+      << "--xnnpack_delegate, -x [0:1]: xnnpack delegate\n"
+      << "--webnn_delegate, -n [0:1]: webnn delegate\n";
 }
 
 int Main(int argc, char** argv) {
@@ -455,13 +466,14 @@ int Main(int argc, char** argv) {
         {"gl_backend", required_argument, nullptr, 'g'},
         {"hexagon_delegate", required_argument, nullptr, 'j'},
         {"xnnpack_delegate", required_argument, nullptr, 'x'},
+        {"webnn_delegate", required_argument, nullptr, 'n'},
         {nullptr, 0, nullptr, 0}};
 
     /* getopt_long stores the option index here. */
     int option_index = 0;
 
     c = getopt_long(argc, argv,
-                    "a:b:c:d:e:f:g:i:j:l:m:p:r:s:t:v:w:x:", long_options,
+                    "a:b:c:d:e:f:g:i:j:l:m:p:r:s:t:v:w:x:n:", long_options,
                     &option_index);
 
     /* Detect the end of the options. */
@@ -527,6 +539,10 @@ int Main(int argc, char** argv) {
         break;
       case 'x':
         s.xnnpack_delegate =
+            strtol(optarg, nullptr, 10);  // NOLINT(runtime/deprecated_fn)
+        break;
+      case 'n':
+        s.webnn_delegate =
             strtol(optarg, nullptr, 10);  // NOLINT(runtime/deprecated_fn)
         break;
       case 'h':
