@@ -281,26 +281,20 @@ class Subgraph {
   TfLiteStatus Prepare(TfLiteContext* context) { return kTfLiteOk; }
 
   TfLiteStatus Invoke(TfLiteContext* context) {
-    std::vector<ml::Input> ml_inputs;
     ml::NamedInputs named_inputs = ml::CreateNamedInputs();
     for (int t : inputs_) {
-      ml::Input ml_input;
-      ml_input.buffer = context->tensors[t].data.raw;
-      ml_input.size = context->tensors[t].bytes;
+      ml_inputs_[t].buffer = context->tensors[t].data.raw;
+      ml_inputs_[t].size = context->tensors[t].bytes;
       std::string name = std::to_string(t);
-      ml_inputs.push_back(ml_input);
-      named_inputs.Set(name.c_str(), &(ml_inputs.back()));
+      named_inputs.Set(name.c_str(), &ml_inputs_[t]);
     }
 
-    std::vector<ml::Output> ml_outputs;
     ml::NamedOutputs named_outputs = ml::CreateNamedOutputs();
     for (int t : outputs_) {
-      ml::Output ml_output;
-      ml_output.buffer = context->tensors[t].data.raw;
-      ml_output.size = context->tensors[t].bytes;
+      ml_outputs_[t].buffer = context->tensors[t].data.raw;
+      ml_outputs_[t].size = context->tensors[t].bytes;
       std::string name = std::to_string(t);
-      ml_outputs.push_back(ml_output);
-      named_outputs.Set(name.c_str(), &(ml_outputs.back()));
+      named_outputs.Set(name.c_str(), &ml_outputs_[t]);
     }
 
     ml::ComputeGraphStatus status = ml_graph_.ComputeSync(named_inputs, named_outputs);
@@ -898,28 +892,19 @@ class Subgraph {
     TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
         logging_context, output_tensor, node->outputs->data[0], node_index));
 
+    if (add_params != nullptr) {
+      if (add_params->activation != kTfLiteActNone) {
+        TF_LITE_MAYBE_KERNEL_LOG(
+            logging_context,
+            "activation type #%d in node #%d is not supported.",
+            add_params->activation, node_index);
+        return kTfLiteError;
+      }
+    }
+
     if (builder) {
       ml::Operand output =
         builder.Add(webnn_operands[node->inputs->data[0]], webnn_operands[node->inputs->data[1]]);
-
-      float output_min = -std::numeric_limits<float>::infinity();
-      float output_max = +std::numeric_limits<float>::infinity();
-      if (add_params != nullptr) {
-        TF_LITE_ENSURE_STATUS(ConvertActivationToOutputRange(
-            logging_context, node_index, add_params->activation, &output_min,
-            &output_max));
-        ml::OperandDescriptor desc;
-        std::vector<int32_t> dims = {1};
-        desc.type = ml::OperandType::Float32;
-        desc.dimensions = dims.data();
-        desc.dimensionsCount = dims.size();
-        ml::Operand minValue = builder.Constant(&desc, &output_min, sizeof(float));
-        ml::Operand maxValue = builder.Constant(&desc, &output_max, sizeof(float));
-        ml::ClampOptions options;
-        options.maxValue = maxValue;
-        options.minValue = minValue;
-        output = builder.Clamp(output, &options);
-      }
       webnn_operands[node->outputs->data[0]] = output;
     }
 
@@ -928,13 +913,22 @@ class Subgraph {
 
  private:
   Subgraph(ml::Graph graph, std::unordered_set<int>&& inputs, std::unordered_set<int>&& outputs)
-      : ml_graph_(graph), inputs_(inputs), outputs_(outputs) {}
+      : ml_graph_(graph), inputs_(inputs), outputs_(outputs) {
+    for (auto& i : inputs_) {
+      ml_inputs_[i] = {};
+    }
+    for (auto& o : outputs_) {
+      ml_outputs_[o] = {};
+    }
+  }
 
   ml::Graph ml_graph_;
   // TFLite Tensor IDs == name of input/output tensors for the
   // delegated subgraph.
   std::unordered_set<int> inputs_;
   std::unordered_set<int> outputs_;
+  std::unordered_map<int, ml::Input> ml_inputs_;
+  std::unordered_map<int, ml::Output> ml_outputs_;
 };
 
 TfLiteIntArray* Delegate::PrepareOpsToDelegate(TfLiteContext* context) {
