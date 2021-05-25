@@ -684,6 +684,14 @@ class Subgraph {
                                context->tensors, conv_params,
                                quasi_static_tensors, webnn_operands, constant_buffers);
       }
+      case kTfLiteBuiltinDepthwiseConv2d: {
+        const TfLiteDepthwiseConvParams* dwconv_params =
+            static_cast<const TfLiteDepthwiseConvParams*>(node->builtin_data);
+
+        return VisitDepthwiseConv2DNode(builder, logging_context, node_index,
+                                        node, context->tensors, dwconv_params,
+                                        quasi_static_tensors, webnn_operands, constant_buffers);
+      }
       default:
         return kTfLiteError;
     }
@@ -819,6 +827,98 @@ class Subgraph {
     TF_LITE_ENSURE_STATUS(VisitActivation(
           builder, logging_context, node_index, output_tensor_id, output_tensor_id,
           conv_params->activation, webnn_operands, constant_buffers));
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitDepthwiseConv2DNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteDepthwiseConvParams* dwconv_params,
+      const std::unordered_set<int>& quasi_static_tensors,
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 3, 1, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, input_tensor, 4,
+                                           input_tensor_id));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int filter_tensor_id = node->inputs->data[1];
+    const TfLiteTensor& filter_tensor = tensors[filter_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, filter_tensor, filter_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, filter_tensor, 4,
+                                           filter_tensor_id));
+    if (quasi_static_tensors.count(filter_tensor_id) == 0) {
+      TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+          logging_context, filter_tensor, filter_tensor_id, node_index));
+    }
+
+    const int bias_tensor_id = node->inputs->data[2];
+    // bias_tensor_id < 0 means without bias.
+    if (bias_tensor_id >= 0) {
+      const TfLiteTensor& bias_tensor = tensors[bias_tensor_id];
+      TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt32Type(
+          logging_context, bias_tensor, node->inputs->data[2], node_index));
+      TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, bias_tensor, 1,
+                                            node->inputs->data[2]));
+      if (quasi_static_tensors.count(node->inputs->data[2]) == 0) {
+        TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+            logging_context, bias_tensor, node->inputs->data[2], node_index));
+      }
+    }
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, output_tensor, 4,
+                                           output_tensor_id));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    const int output_channels = filter_tensor.dims->data[3];
+    TF_LITE_ENSURE_STATUS(CheckDepthwiseConvolutionParams(
+        logging_context, dwconv_params, output_channels, node_index));
+
+    ml::AutoPad auto_pad;
+    TF_LITE_ENSURE_STATUS(CalculatePadding(
+        logging_context, dwconv_params->padding, auto_pad, node_index));
+
+    if (builder) {
+      ml::Conv2dOptions options;
+      options.autoPad = auto_pad;
+      std::vector<int32_t> strides = {
+          dwconv_params->stride_height, dwconv_params->stride_width};
+      options.strides = strides.data();
+      options.stridesCount = strides.size();
+      std::vector<int32_t> dilations = {
+          dwconv_params->dilation_height_factor, dwconv_params->dilation_width_factor};
+      options.dilations = dilations.data();
+      options.dilationsCount = dilations.size();
+      options.inputLayout = ml::InputOperandLayout::Nhwc;
+      options.filterLayout = ml::FilterOperandLayout::Ihwo;
+      options.groups = output_channels / dwconv_params->depth_multiplier;
+      ml::Operand output =
+          builder.Conv2d(webnn_operands[input_tensor_id],
+                         webnn_operands[filter_tensor_id],
+                         &options);
+      if (bias_tensor_id >= 0) {
+        output = builder.Add(output, webnn_operands[bias_tensor_id]);
+      }
+      webnn_operands[output_tensor_id] = output;
+    }
+
+    TF_LITE_ENSURE_STATUS(VisitActivation(
+        builder, logging_context, node_index, output_tensor_id, output_tensor_id,
+        dwconv_params->activation, webnn_operands, constant_buffers));
 
     return kTfLiteOk;
   }
