@@ -738,6 +738,13 @@ class Subgraph {
                                         node, context->tensors, dwconv_params,
                                         quasi_static_tensors, webnn_operands, constant_buffers);
       }
+      case kTfLiteBuiltinReshape: {
+        const TfLiteReshapeParams* reshape_params =
+            static_cast<const TfLiteReshapeParams*>(node->builtin_data);
+
+        return VisitReshapeNode(builder, logging_context, node_index, node,
+                                context->tensors, reshape_params, webnn_operands);
+      }
       default:
         return kTfLiteError;
     }
@@ -1024,6 +1031,65 @@ class Subgraph {
     TF_LITE_ENSURE_STATUS(VisitActivation(
         builder, logging_context, node_index, output_tensor_id, output_tensor_id,
         dwconv_params->activation, webnn_operands, constant_buffers));
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitReshapeNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteReshapeParams* reshape_params,
+      std::vector<ml::Operand>& webnn_operands) {
+    switch (node->inputs->size) {
+      case 1:
+      case 2:
+        break;
+      default:
+        TF_LITE_MAYBE_KERNEL_LOG(
+            logging_context,
+            "unexpected number of inputs (%d) in node #%d: "
+            "either one or two inputs expected",
+            node->inputs->size, node_index);
+        return kTfLiteError;
+    }
+    if (node->outputs->size != 1) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "unexpected number of outputs (%d) in node #%d: one output expected",
+          node->outputs->size, node_index);
+      return kTfLiteError;
+    }
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    if (node->inputs->size == 2) {
+      const int shape_tensor_id = node->inputs->data[1];
+      const TfLiteTensor& shape_tensor = tensors[shape_tensor_id];
+      TF_LITE_ENSURE_STATUS(CheckTensorType(logging_context, shape_tensor,
+                                            kTfLiteInt32, shape_tensor_id,
+                                            node_index));
+      TF_LITE_ENSURE_STATUS(CheckShapeTensorShape(
+          logging_context, shape_tensor, shape_tensor_id, node_index));
+      TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+          logging_context, shape_tensor,shape_tensor_id, node_index));
+    }
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    if (builder) {
+      webnn_operands[output_tensor_id] = builder.Reshape(
+          webnn_operands[input_tensor_id], &output_tensor.dims->data[0], output_tensor.dims->size);
+    }
 
     return kTfLiteOk;
   }
