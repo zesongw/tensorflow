@@ -402,6 +402,44 @@ class Subgraph {
     return kTfLiteOk;
   }
 
+  static TfLiteStatus CheckPoolingParams(TfLiteContext* context,
+                                         const TfLitePoolParams* params,
+                                         int node_index) {
+    if (params->stride_width <= 0) {
+      TF_LITE_MAYBE_KERNEL_LOG(context, "invalid stride width %d in node #%d",
+                               params->stride_width, node_index);
+      return kTfLiteError;
+    }
+    if (params->stride_height <= 0) {
+      TF_LITE_MAYBE_KERNEL_LOG(context, "invalid stride height %d in node #%d",
+                               params->stride_height, node_index);
+      return kTfLiteError;
+    }
+
+    if (params->filter_width <= 0) {
+      TF_LITE_MAYBE_KERNEL_LOG(context, "invalid filter width %d in node #%d",
+                               params->filter_width, node_index);
+      return kTfLiteError;
+    }
+    if (params->filter_height <= 0) {
+      TF_LITE_MAYBE_KERNEL_LOG(context, "invalid filter height %d in node #%d",
+                               params->filter_height, node_index);
+      return kTfLiteError;
+    }
+
+    if (params->filter_width == 1 && params->filter_height == 1 &&
+        std::max(params->stride_width, params->stride_height) > 1) {
+      TF_LITE_MAYBE_KERNEL_LOG(context,
+                               "unsupported pooling with 1x1 filter "
+                               "and %dx%d stride in node #%d",
+                               params->stride_width, params->stride_height,
+                               node_index);
+      return kTfLiteError;
+    }
+
+    return kTfLiteOk;
+  }
+
   static TfLiteStatus CheckNumInputsAndOutputs(
       TfLiteContext* context, TfLiteNode* node, int min_num_inputs,
       int max_num_inputs, int expected_num_outputs, int node_index) {
@@ -676,6 +714,14 @@ class Subgraph {
         return VisitAddNode(builder, logging_context, node_index, node,
                             context->tensors, add_params, webnn_operands, constant_buffers);
       }
+      case kTfLiteBuiltinAveragePool2d: {
+        const TfLitePoolParams* pool_params =
+            static_cast<const TfLitePoolParams*>(node->builtin_data);
+
+        return VisitAveragePool2DNode(builder, logging_context, node_index,
+                                      node, context->tensors, pool_params,
+                                      webnn_operands, constant_buffers);
+      }
       case kTfLiteBuiltinConv2d: {
         const TfLiteConvParams* conv_params =
             static_cast<const TfLiteConvParams*>(node->builtin_data);
@@ -737,6 +783,65 @@ class Subgraph {
           builder, logging_context, node_index, output_tensor_id, output_tensor_id,
           add_params->activation, webnn_operands, constant_buffers));
     }
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitAveragePool2DNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLitePoolParams* pool_params,
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 1, 1, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    TF_LITE_ENSURE_STATUS(
+        CheckPoolingParams(logging_context, pool_params, node_index));
+
+    ml::AutoPad auto_pad;
+    TF_LITE_ENSURE_STATUS(CalculatePadding(
+        logging_context, pool_params->padding, auto_pad, node_index));
+
+    if (builder) {
+      ml::Operand output;
+      if (pool_params->filter_height == 1 && pool_params->filter_width == 1) {
+        // Only do activation.
+        output = webnn_operands[input_tensor_id];
+      } else {
+        ml::Pool2dOptions options;
+        options.autoPad = auto_pad;
+        std::vector<int32_t> strides = {
+            pool_params->stride_height, pool_params->stride_width};
+        options.strides = strides.data();
+        options.stridesCount = strides.size();
+        std::vector<int32_t> windowDimensions = {
+            pool_params->filter_height, pool_params->filter_width};
+        options.windowDimensions = windowDimensions.data();
+        options.windowDimensionsCount = windowDimensions.size();
+        options.layout = ml::InputOperandLayout::Nhwc;
+        output = builder.AveragePool2d(webnn_operands[input_tensor_id], &options);
+      }
+      webnn_operands[output_tensor_id] = output;
+    }
+
+    TF_LITE_ENSURE_STATUS(VisitActivation(
+          builder, logging_context, node_index, output_tensor_id, output_tensor_id,
+          pool_params->activation, webnn_operands, constant_buffers));
 
     return kTfLiteOk;
   }
