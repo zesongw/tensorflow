@@ -497,6 +497,18 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "tflite_with_webnn",
+    srcs = ["tflite_with_webnn.cc"],
+    copts = tflite_copts() + tflite_copts_warnings(),
+    linkstatic = True,
+    deps = [
+        "//tensorflow/lite/c:common",
+        "//tensorflow/lite/delegates/webnn:webnn_delegate",
+    ],
+    alwayslink = 1,
+)
+
 # Enables applying XNNPACK delegate for float models in TFLite runtime.
 # WARNING: This build flag is experimental and subject to change.
 config_setting(

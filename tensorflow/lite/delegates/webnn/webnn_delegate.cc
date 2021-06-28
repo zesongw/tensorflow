@@ -28,8 +28,14 @@ limitations under the License.
 #include <vector>
 
 #include <webnn/webnn_cpp.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#include <emscripten/html5_webnn.h>
+#else
 #include <webnn/webnn_proc.h>
 #include <webnn_native/WebnnNative.h>
+#endif
 
 #include <fp16/fp16.h>
 #include "tensorflow/lite/builtin_ops.h"
@@ -52,7 +58,7 @@ class Delegate {
   explicit Delegate(const TfLiteWebNNDelegateOptions* options) {
     // TODO(nhu): support MLDevicePreference and MLPowerPreference
     TFLITE_LOG_PROD_ONCE(tflite::TFLITE_LOG_INFO,
-                         "Created TensorFlow Lite WebNN delegate for CPU.");
+                         "Created TensorFlow Lite WebNN delegate.");
   }
 
   TfLiteIntArray* PrepareOpsToDelegate(TfLiteContext* context);
@@ -108,9 +114,13 @@ class Subgraph {
     }
 
     // Create WebNN context and graph builder
-    WebnnProcTable backendProcs = webnn_native::GetProcs();
-    webnnProcSetProcs(&backendProcs);
+#ifdef __EMSCRIPTEN__
+    ml::Context ml_context = emscripten_webnn_create_context();
+#else
+    WebnnProcTable backend_procs = webnn_native::GetProcs();
+    webnnProcSetProcs(&backend_procs);
     ml::Context ml_context = ml::Context(webnn_native::CreateContext());
+#endif
     if (!ml_context) {
       TF_LITE_KERNEL_LOG(context, "Failed to create WebNN context.");
       return nullptr;
