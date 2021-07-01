@@ -724,6 +724,13 @@ class Subgraph {
         return VisitAddNode(builder, logging_context, node_index, node,
                             context->tensors, add_params, webnn_operands, constant_buffers);
       }
+      case kTfLiteBuiltinMul: {
+        const TfLiteMulParams* mul_params =
+            static_cast<const TfLiteMulParams*>(node->builtin_data);
+
+        return VisitMulNode(builder, logging_context, node_index, node,
+                            context->tensors, mul_params, webnn_operands, constant_buffers);
+      }
       case kTfLiteBuiltinAveragePool2d: {
         const TfLitePoolParams* pool_params =
             static_cast<const TfLitePoolParams*>(node->builtin_data);
@@ -731,6 +738,14 @@ class Subgraph {
         return VisitAveragePool2DNode(builder, logging_context, node_index,
                                       node, context->tensors, pool_params,
                                       webnn_operands, constant_buffers);
+      }
+      case kTfLiteBuiltinMaxPool2d: {
+        const TfLitePoolParams* pool_params =
+            static_cast<const TfLitePoolParams*>(node->builtin_data);
+
+        return VisitMaxPool2DNode(builder, logging_context, node_index,
+                                  node, context->tensors, pool_params,
+                                  webnn_operands, constant_buffers);
       }
       case kTfLiteBuiltinConv2d: {
         const TfLiteConvParams* conv_params =
@@ -754,6 +769,13 @@ class Subgraph {
 
         return VisitReshapeNode(builder, logging_context, node_index, node,
                                 context->tensors, reshape_params, webnn_operands);
+      }
+      case kTfLiteBuiltinSoftmax: {
+        const TfLiteSoftmaxParams* softmax_params =
+            static_cast<const TfLiteSoftmaxParams*>(node->builtin_data);
+
+        return VisitSoftmaxNode(builder, logging_context, node_index, node,
+                                context->tensors, softmax_params, webnn_operands);
       }
       default:
         return kTfLiteError;
@@ -799,6 +821,50 @@ class Subgraph {
       TF_LITE_ENSURE_STATUS(VisitActivation(
           builder, logging_context, node_index, output_tensor_id, output_tensor_id,
           add_params->activation, webnn_operands, constant_buffers));
+    }
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitMulNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteMulParams* mul_params,
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 2, 1, node_index));
+
+    const int input1_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input1_tensor = tensors[input1_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, input1_tensor, input1_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input1_tensor, input1_tensor_id, node_index));
+
+    const int input2_tensor_id = node->inputs->data[1];
+    const TfLiteTensor& input2_tensor = tensors[input2_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, input2_tensor, input2_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input2_tensor, input2_tensor_id, node_index));
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    if (builder) {
+      webnn_operands[output_tensor_id] =
+          builder.Mul(webnn_operands[input1_tensor_id], webnn_operands[input2_tensor_id]);
+    }
+
+    if (mul_params != nullptr) {
+      TF_LITE_ENSURE_STATUS(VisitActivation(
+          builder, logging_context, node_index, output_tensor_id, output_tensor_id,
+          mul_params->activation, webnn_operands, constant_buffers));
     }
 
     return kTfLiteOk;
@@ -852,6 +918,65 @@ class Subgraph {
         options.windowDimensionsCount = windowDimensions.size();
         options.layout = ml::InputOperandLayout::Nhwc;
         output = builder.AveragePool2d(webnn_operands[input_tensor_id], &options);
+      }
+      webnn_operands[output_tensor_id] = output;
+    }
+
+    TF_LITE_ENSURE_STATUS(VisitActivation(
+          builder, logging_context, node_index, output_tensor_id, output_tensor_id,
+          pool_params->activation, webnn_operands, constant_buffers));
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitMaxPool2DNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLitePoolParams* pool_params,
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 1, 1, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    TF_LITE_ENSURE_STATUS(
+        CheckPoolingParams(logging_context, pool_params, node_index));
+
+    ml::AutoPad auto_pad;
+    TF_LITE_ENSURE_STATUS(CalculatePadding(
+        logging_context, pool_params->padding, auto_pad, node_index));
+
+    if (builder) {
+      ml::Operand output;
+      if (pool_params->filter_height == 1 && pool_params->filter_width == 1) {
+        // Only do activation.
+        output = webnn_operands[input_tensor_id];
+      } else {
+        ml::Pool2dOptions options;
+        options.autoPad = auto_pad;
+        std::vector<int32_t> strides = {
+            pool_params->stride_height, pool_params->stride_width};
+        options.strides = strides.data();
+        options.stridesCount = strides.size();
+        std::vector<int32_t> windowDimensions = {
+            pool_params->filter_height, pool_params->filter_width};
+        options.windowDimensions = windowDimensions.data();
+        options.windowDimensionsCount = windowDimensions.size();
+        options.layout = ml::InputOperandLayout::Nhwc;
+        output = builder.MaxPool2d(webnn_operands[input_tensor_id], &options);
       }
       webnn_operands[output_tensor_id] = output;
     }
@@ -1099,6 +1224,44 @@ class Subgraph {
     if (builder) {
       webnn_operands[output_tensor_id] = builder.Reshape(
           webnn_operands[input_tensor_id], &output_tensor.dims->data[0], output_tensor.dims->size);
+    }
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitSoftmaxNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteSoftmaxParams* params,
+      std::vector<ml::Operand>& webnn_operands) {
+    if (params->beta != 1.0f) {
+      if (logging_context != nullptr) {
+        TF_LITE_KERNEL_LOG(logging_context,
+                           "unsupported beta value %.7f in SOFTMAX node #%d",
+                           params->beta, node_index);
+      }
+      return kTfLiteError;
+    }
+
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 1, 1, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    if (builder) {
+      webnn_operands[output_tensor_id] = builder.Softmax(webnn_operands[input_tensor_id]);
     }
 
     return kTfLiteOk;
