@@ -644,7 +644,7 @@ class Subgraph {
     *reinterpret_cast<float*>(min_buffer.get()) = min_value;
     std::unique_ptr<char> max_buffer(new char[sizeof(float)]);
     *reinterpret_cast<float*>(max_buffer.get()) = max_value;
-    std::vector<int32_t> dims = {1};
+    std::vector<int32_t> dims = {};
     ml::OperandDescriptor desc = {
         ml::OperandType::Float32, dims.data(), static_cast<uint32_t>(dims.size())};
     ml::Operand min_operand = builder.Constant(&desc, min_buffer.get(), sizeof(float));
