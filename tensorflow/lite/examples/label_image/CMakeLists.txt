@@ -44,9 +44,9 @@ if(TFLITE_ENABLE_WEBNN)
   list(APPEND TFLITE_LABEL_IMAGE_SRCS
     ${TFLITE_SOURCE_DIR}/tools/delegates/webnn_delegate_provider.cc
   )
-  list(APPEND TFLITE_LABEL_IMAGE_SRCS "~/code/webnn-native/out/openvino/gen/src/webnn/webnn_cpp.cpp")
+  list(APPEND TFLITE_LABEL_IMAGE_SRCS "$ENV{WEBNN_NATIVE_DIR}/gen/src/webnn/webnn_cpp.cpp")
   link_directories(
-    "~/code/webnn-native/out/openvino"
+    "$ENV{WEBNN_NATIVE_DIR}"
   )
 else()
   set(TFLITE_LABEL_IMAGE_CC_OPTIONS "-DTFLITE_WITHOUT_WEBNN")

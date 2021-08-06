@@ -238,7 +238,10 @@ class Subgraph {
           std::string name = std::to_string(t);
           operand = ml_builder.Input(name.c_str(), &desc);
         } else {
-          operand = ml_builder.Constant(&desc, data, context->tensors[t].bytes);
+          ml::ArrayBufferView buffer = {const_cast<void*>(data), context->tensors[t].bytes};
+          // buffer.buffer = data;
+          // buffer.byteLength = context->tensors[t].bytes;
+          operand = ml_builder.Constant(&desc, &buffer);
         }
         webnn_operands[t] = operand;
       }
@@ -281,7 +284,7 @@ class Subgraph {
       named_operands.Set(name.c_str(), webnn_operands[o]);
     }
 
-    ml::Graph ml_graph = ml_builder.BuildSync(named_operands);
+    ml::Graph ml_graph = ml_builder.Build(named_operands);
     if (!ml_graph) {
       TF_LITE_KERNEL_LOG(context, "failed to build WebNN graph");
       return nullptr;
@@ -295,8 +298,8 @@ class Subgraph {
   TfLiteStatus Invoke(TfLiteContext* context) {
     ml::NamedInputs named_inputs = ml::CreateNamedInputs();
     for (int t : inputs_) {
-      ml_inputs_[t].buffer = context->tensors[t].data.raw;
-      ml_inputs_[t].size = context->tensors[t].bytes;
+      ml_inputs_[t].resource.buffer = context->tensors[t].data.raw;
+      ml_inputs_[t].resource.byteLength = context->tensors[t].bytes;
       std::string name = std::to_string(t);
       named_inputs.Set(name.c_str(), &ml_inputs_[t]);
     }
@@ -304,12 +307,12 @@ class Subgraph {
     ml::NamedOutputs named_outputs = ml::CreateNamedOutputs();
     for (int t : outputs_) {
       ml_outputs_[t].buffer = context->tensors[t].data.raw;
-      ml_outputs_[t].size = context->tensors[t].bytes;
+      ml_outputs_[t].byteLength = context->tensors[t].bytes;
       std::string name = std::to_string(t);
       named_outputs.Set(name.c_str(), &ml_outputs_[t]);
     }
 
-    ml::ComputeGraphStatus status = ml_graph_.ComputeSync(named_inputs, named_outputs);
+    ml::ComputeGraphStatus status = ml_graph_.Compute(named_inputs, named_outputs);
     if (status != ml::ComputeGraphStatus::Success) {
       TF_LITE_KERNEL_LOG(context, "failed to compute WebNN graph");
       return kTfLiteError;
@@ -647,8 +650,10 @@ class Subgraph {
     std::vector<int32_t> dims = {};
     ml::OperandDescriptor desc = {
         ml::OperandType::Float32, dims.data(), static_cast<uint32_t>(dims.size())};
-    ml::Operand min_operand = builder.Constant(&desc, min_buffer.get(), sizeof(float));
-    ml::Operand max_operand = builder.Constant(&desc, max_buffer.get(), sizeof(float));
+    ml::ArrayBufferView min_buffer_view = {min_buffer.get(), sizeof(float)};
+    ml::Operand min_operand = builder.Constant(&desc, &min_buffer_view);
+    ml::ArrayBufferView max_buffer_view = {max_buffer.get(), sizeof(float)};
+    ml::Operand max_operand = builder.Constant(&desc, &max_buffer_view);
     ml::ClampOptions options;
     options.minValue = min_operand;
     options.maxValue = max_operand;
@@ -1284,7 +1289,7 @@ class Subgraph {
   std::unordered_set<int> inputs_;
   std::unordered_set<int> outputs_;
   std::unordered_map<int, ml::Input> ml_inputs_;
-  std::unordered_map<int, ml::Output> ml_outputs_;
+  std::unordered_map<int, ml::ArrayBufferView> ml_outputs_;
 };
 
 TfLiteIntArray* Delegate::PrepareOpsToDelegate(TfLiteContext* context) {
