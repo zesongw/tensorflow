@@ -163,7 +163,10 @@ class Subgraph {
       }
 
       switch (registration->builtin_code) {
+        case kTfLiteBuiltinMean:
+        case kTfLiteBuiltinPad:
         case kTfLiteBuiltinReshape:
+        case kTfLiteBuiltinResizeBilinear:
           // Ignore the second input (new shape),
           // because it is represented as parameters of the WebNN operator
           // rather than extra input.
@@ -775,6 +778,14 @@ class Subgraph {
         return VisitReshapeNode(builder, logging_context, node_index, node,
                                 context->tensors, reshape_params, webnn_operands);
       }
+      case kTfLiteBuiltinResizeBilinear: {
+        const TfLiteResizeBilinearParams* resize_params =
+            static_cast<const TfLiteResizeBilinearParams*>(node->builtin_data);
+
+        return VisitResizeBilinearNode(builder, logging_context, node_index,
+                                       node, context->tensors, resize_params,
+                                       webnn_operands);
+      }
       case kTfLiteBuiltinSoftmax: {
         const TfLiteSoftmaxParams* softmax_params =
             static_cast<const TfLiteSoftmaxParams*>(node->builtin_data);
@@ -1229,6 +1240,77 @@ class Subgraph {
     if (builder) {
       webnn_operands[output_tensor_id] = builder.Reshape(
           webnn_operands[input_tensor_id], &output_tensor.dims->data[0], output_tensor.dims->size);
+    }
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitResizeBilinearNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteResizeBilinearParams* resize_params,
+      std::vector<ml::Operand>& webnn_operands) {
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 2, 1, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, input_tensor, 4,
+                                           input_tensor_id));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int shape_tensor_id = node->inputs->data[1];
+    const TfLiteTensor& shape_tensor = tensors[shape_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorType(logging_context, shape_tensor,
+                                          kTfLiteInt32, shape_tensor_id,
+                                          node_index));
+    TF_LITE_ENSURE_STATUS(CheckShapeTensorShape(
+        logging_context, shape_tensor, shape_tensor_id, node_index));
+    if (shape_tensor.dims->data[0] != 2) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "unexpected number of dimensions %d in the output shape in node %d",
+          shape_tensor.dims->data[0], node_index);
+    }
+    TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+        logging_context, shape_tensor, shape_tensor_id, node_index));
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, output_tensor, 4,
+                                           output_tensor_id));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    const int32_t* shape_data =
+        reinterpret_cast<const int32_t*>(shape_tensor.data.data);
+    for (int i = 0; i < shape_tensor.dims->data[0]; i++) {
+      const int32_t dim = shape_data[i];
+      if (dim <= 0) {
+        TF_LITE_MAYBE_KERNEL_LOG(
+            logging_context, "invalid output dimension #%d value %d in node %d",
+            i, dim, node_index);
+        return kTfLiteError;
+      }
+    }
+
+    if (builder) {
+      std::vector<int32_t> new_sizes = {
+        input_tensor.dims->data[0],
+        shape_data[0],
+        shape_data[1],
+        input_tensor.dims->data[3]
+      };
+      ml::ResampleOptions options;
+      options.mode = ml::InterpolationMode::Linear;
+      options.sizes = new_sizes.data();
+      options.sizesCount = new_sizes.size();
+      webnn_operands[output_tensor_id] = builder.Resample(webnn_operands[input_tensor_id], &options);
     }
 
     return kTfLiteOk;
