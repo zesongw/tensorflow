@@ -755,6 +755,14 @@ class Subgraph {
                                   node, context->tensors, pool_params,
                                   webnn_operands, constant_buffers);
       }
+      case kTfLiteBuiltinConcatenation: {
+        const TfLiteConcatenationParams* concat_params =
+            static_cast<const TfLiteConcatenationParams*>(node->builtin_data);
+
+        return VisitConcatenationNode(builder, logging_context, node_index, node,
+                                      context->tensors, concat_params,
+                                      webnn_operands, constant_buffers);
+      }
       case kTfLiteBuiltinConv2d: {
         const TfLiteConvParams* conv_params =
             static_cast<const TfLiteConvParams*>(node->builtin_data);
@@ -1001,6 +1009,28 @@ class Subgraph {
           builder, logging_context, node_index, output_tensor_id, output_tensor_id,
           pool_params->activation, webnn_operands, constant_buffers));
 
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitConcatenationNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteConcatenationParams* concat_params,
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
+    size_t input_size = node->inputs->size;
+    const TfLiteTensor& first_input_tensor = tensors[node->inputs->data[0]];
+    uint32_t axis = concat_params->axis < 0
+                     ? first_input_tensor.dims->size + concat_params->axis
+                     : concat_params->axis;
+    if (builder) {
+      std::vector<ml::Operand> input_operands;
+      for (size_t i = 0; i < input_size; ++i) {
+        input_operands.push_back(webnn_operands[node->inputs->data[i]]);
+      }
+      ml::Operand output_operand = builder.Concat(input_operands.size(), input_operands.data(), axis);
+      webnn_operands[node->outputs->data[0]] = output_operand;
+    }
     return kTfLiteOk;
   }
 
