@@ -56,9 +56,17 @@ class Delegate {
 
  public:
   explicit Delegate(const TfLiteWebNNDelegateOptions* options) {
-    // TODO(nhu): support MLDevicePreference and MLPowerPreference
+    context_options_.devicePreference = static_cast<MLDevicePreference>(options->devicePreference);
+    context_options_.powerPreference = static_cast<MLPowerPreference>(options->powerPreference);
+    std::unordered_map<uint32_t, std::string> device_preference_names = {
+        {0, "Default"}, {1, "GPU"}, {2, "CPU"}};
+    std::unordered_map<uint32_t, std::string> power_preference_names = {
+        {0, "Default"}, {1, "High-performance"}, {2, "Low-power"}};
     TFLITE_LOG_PROD_ONCE(tflite::TFLITE_LOG_INFO,
-                         "Created TensorFlow Lite WebNN delegate.");
+                         "Created TensorFlow Lite WebNN delegate for device"
+                         " %s and power %s.",
+                         device_preference_names[context_options_.devicePreference].c_str(),
+                         power_preference_names[context_options_.powerPreference].c_str());
   }
 
   TfLiteIntArray* PrepareOpsToDelegate(TfLiteContext* context);
@@ -87,6 +95,8 @@ class Delegate {
   std::unordered_set<int> static_unpack_nodes_;
   // Set of indices of tensors with unpacked static sparse weights.
   std::unordered_set<int> static_sparse_weights_;
+
+  MLContextOptions context_options_;
 };
 
 class Subgraph {
@@ -115,11 +125,11 @@ class Subgraph {
 
     // Create WebNN context and graph builder
 #ifdef __EMSCRIPTEN__
-    ml::Context ml_context = emscripten_webnn_create_context();
+    ml::Context ml_context = emscripten_webnn_create_context(&(delegate->context_options_));
 #else
     WebnnProcTable backend_procs = webnn_native::GetProcs();
     webnnProcSetProcs(&backend_procs);
-    ml::Context ml_context = ml::Context(webnn_native::CreateContext());
+    ml::Context ml_context = ml::Context(webnn_native::CreateContext(&(delegate->context_options_)));
 #endif
     if (!ml_context) {
       TF_LITE_KERNEL_LOG(context, "Failed to create WebNN context.");

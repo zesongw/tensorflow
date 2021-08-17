@@ -94,7 +94,7 @@ TfLiteDelegatePtr CreateXNNPACKDelegate(
 #endif
 TfLiteDelegatePtr CreateXNNPACKDelegate(int num_threads);
 
-TfLiteDelegatePtr CreateWebNNDelegate();
+TfLiteDelegatePtr CreateWebNNDelegate(int device);
 
 }  // namespace evaluation
 }  // namespace tflite

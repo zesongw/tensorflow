@@ -144,6 +144,7 @@ class DelegateProviders {
                      "WebNN delegate isn't supported on the platform!";
       } else {
         params_.Set<bool>("use_webnn", true);
+        params_.Set<int>("webnn_device", s.webnn_device);
       }
     }
   }
@@ -433,7 +434,8 @@ void display_usage() {
       << "--verbose, -v: [0|1] print more information\n"
       << "--warmup_runs, -w: number of warmup runs\n"
       << "--xnnpack_delegate, -x [0:1]: xnnpack delegate\n"
-      << "--webnn_delegate, -n [0:1]: webnn delegate\n";
+      << "--webnn_delegate, -n [0|1]: webnn delegate (on|off)\n"
+      << "--webnn_device, -d [0|1|2]: webnn device (default|gpu|cpu) \n";
 }
 
 int Main(int argc, char** argv) {
@@ -467,6 +469,7 @@ int Main(int argc, char** argv) {
         {"hexagon_delegate", required_argument, nullptr, 'j'},
         {"xnnpack_delegate", required_argument, nullptr, 'x'},
         {"webnn_delegate", required_argument, nullptr, 'n'},
+        {"webnn_device", required_argument, nullptr, 'd'},
         {nullptr, 0, nullptr, 0}};
 
     /* getopt_long stores the option index here. */
@@ -543,6 +546,10 @@ int Main(int argc, char** argv) {
         break;
       case 'n':
         s.webnn_delegate =
+            strtol(optarg, nullptr, 10);  // NOLINT(runtime/deprecated_fn)
+        break;
+      case 'd':
+        s.webnn_device =
             strtol(optarg, nullptr, 10);  // NOLINT(runtime/deprecated_fn)
         break;
       case 'h':

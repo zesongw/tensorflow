@@ -24,6 +24,7 @@ class WebNNDelegateProvider : public DelegateProvider {
  public:
   WebNNDelegateProvider() {
     default_params_.AddParam("use_webnn", ToolParam::Create<bool>(false));
+    default_params_.AddParam("webnn_device", ToolParam::Create<int>(0));
   }
 
   std::vector<Flag> CreateFlags(ToolParams* params) const final;
@@ -39,19 +40,21 @@ REGISTER_DELEGATE_PROVIDER(WebNNDelegateProvider);
 std::vector<Flag> WebNNDelegateProvider::CreateFlags(
     ToolParams* params) const {
   std::vector<Flag> flags = {
-      CreateFlag<bool>("use_webnn", params, "use WebNN")};
+      CreateFlag<bool>("use_webnn", params, "use WebNN"),
+      CreateFlag<int>("webnn_device", params, "WebNN device")};
   return flags;
 }
 
 void WebNNDelegateProvider::LogParams(const ToolParams& params,
                                         bool verbose) const {
   LOG_TOOL_PARAM(params, bool, "use_webnn", "Use WebNN", verbose);
+  LOG_TOOL_PARAM(params, int, "webnn_device", "WebNN device", verbose);
 }
 
 TfLiteDelegatePtr WebNNDelegateProvider::CreateTfLiteDelegate(
     const ToolParams& params) const {
   if (params.Get<bool>("use_webnn")) {
-    return evaluation::CreateWebNNDelegate();
+    return evaluation::CreateWebNNDelegate(params.Get<int>("webnn_device"));
   }
   return TfLiteDelegatePtr(nullptr, [](TfLiteDelegate*) {});
 }

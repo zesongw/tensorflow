@@ -32,6 +32,7 @@ struct Settings {
   bool hexagon_delegate = false;
   bool xnnpack_delegate = false;
   bool webnn_delegate = false;
+  int webnn_device = 0;
   int loop_count = 1;
   float input_mean = 127.5f;
   float input_std = 127.5f;
