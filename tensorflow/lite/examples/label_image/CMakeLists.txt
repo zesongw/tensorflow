@@ -76,6 +76,11 @@ target_compile_options(label_image
 )
 target_link_libraries(label_image
   tensorflow-lite
-  webnn_native
-  webnn_proc
 )
+
+if(TFLITE_ENABLE_WEBNN)
+  target_link_libraries(label_image
+    webnn_native
+    webnn_proc
+  )
+endif()

@@ -52,6 +52,18 @@ else()
   set(TFLITE_BENCHMARK_CC_OPTIONS "-DTFLITE_WITHOUT_XNNPACK")
 endif()  # TFLITE_ENABLE_XNNPACK
 
+if(TFLITE_ENABLE_WEBNN)
+  list(APPEND TFLITE_BENCHMARK_SRCS
+    ${TFLITE_SOURCE_DIR}/tools/delegates/webnn_delegate_provider.cc
+  )
+  list(APPEND TFLITE_BENCHMARK_SRCS "$ENV{WEBNN_NATIVE_DIR}/gen/src/webnn/webnn_cpp.cpp")
+  link_directories(
+    "$ENV{WEBNN_NATIVE_DIR}"
+  )
+else()
+  set(TFLITE_LABEL_IMAGE_CC_OPTIONS "-DTFLITE_WITHOUT_WEBNN")
+endif()  # TFLITE_ENABLE_WEBNN
+
 if(CMAKE_SYSTEM_NAME MATCHES "Android")
   if(_TFLITE_ENABLE_NNAPI)
     list(APPEND TFLITE_BENCHMARK_SRCS
@@ -81,3 +93,10 @@ target_compile_options(benchmark_model
 target_link_libraries(benchmark_model
     ${TFLITE_BENCHMARK_LIBS}
 )
+
+if(TFLITE_ENABLE_WEBNN)
+  target_link_libraries(benchmark_model
+    webnn_native
+    webnn_proc
+  )
+endif()
