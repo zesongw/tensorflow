@@ -41,7 +41,7 @@ std::vector<Flag> WebNNDelegateProvider::CreateFlags(
     ToolParams* params) const {
   std::vector<Flag> flags = {
       CreateFlag<bool>("use_webnn", params, "use WebNN"),
-      CreateFlag<int>("webnn_device", params, "WebNN device")};
+      CreateFlag<int>("webnn_device", params, "WebNN device (0:default, 1:gpu, 2:cpu)")};
   return flags;
 }
 
