@@ -95,8 +95,15 @@ target_link_libraries(benchmark_model
 )
 
 if(TFLITE_ENABLE_WEBNN)
-  target_link_libraries(benchmark_model
-    webnn_native
-    webnn_proc
-  )
+  if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+    target_link_libraries(benchmark_model
+      $ENV{WEBNN_NATIVE_DIR}/webnn_native.dll.lib
+      $ENV{WEBNN_NATIVE_DIR}/webnn_proc.dll.lib
+    )
+  else()
+    target_link_libraries(benchmark_model
+      webnn_native
+      webnn_proc
+    )
+  endif()
 endif()
