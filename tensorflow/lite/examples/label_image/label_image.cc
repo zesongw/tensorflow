@@ -234,6 +234,9 @@ void RunInference(Settings* settings,
 
   tflite::ops::builtin::BuiltinOpResolver resolver;
 
+  static TfLiteRegistration reg = {nullptr, nullptr, nullptr, nullptr};
+  resolver.AddCustom("Convolution2DTransposeBias", &reg);
+
   tflite::InterpreterBuilder(*model, resolver)(&interpreter);
   if (!interpreter) {
     LOG(ERROR) << "Failed to construct interpreter";
