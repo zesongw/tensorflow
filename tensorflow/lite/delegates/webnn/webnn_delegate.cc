@@ -656,22 +656,9 @@ class Subgraph {
   static ml::Operand BuildClamp(
       const ml::GraphBuilder& builder, const ml::Operand& input,
       float min_value, float max_value, std::vector<std::unique_ptr<char>>& constant_buffers) {
-    std::unique_ptr<char> min_buffer(new char[sizeof(float)]);
-    *reinterpret_cast<float*>(min_buffer.get()) = min_value;
-    std::unique_ptr<char> max_buffer(new char[sizeof(float)]);
-    *reinterpret_cast<float*>(max_buffer.get()) = max_value;
-    std::vector<int32_t> dims = {};
-    ml::OperandDescriptor desc = {
-        ml::OperandType::Float32, dims.data(), static_cast<uint32_t>(dims.size())};
-    ml::ArrayBufferView min_buffer_view = {min_buffer.get(), sizeof(float)};
-    ml::Operand min_operand = builder.Constant(&desc, &min_buffer_view);
-    ml::ArrayBufferView max_buffer_view = {max_buffer.get(), sizeof(float)};
-    ml::Operand max_operand = builder.Constant(&desc, &max_buffer_view);
     ml::ClampOptions options;
-    options.minValue = min_operand;
-    options.maxValue = max_operand;
-    constant_buffers.push_back(std::move(min_buffer));
-    constant_buffers.push_back(std::move(max_buffer));
+    options.minValue = min_value;
+    options.maxValue = max_value;
     return builder.Clamp(input, &options);
   }
 
