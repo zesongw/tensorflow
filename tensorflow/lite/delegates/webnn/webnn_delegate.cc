@@ -631,6 +631,20 @@ class Subgraph {
     return kTfLiteOk;
   }
 
+  static TfLiteStatus CheckAxesTensorShape(TfLiteContext* context,
+                                           const TfLiteTensor& tensor,
+                                           int tensor_index, int node_index) {
+    if (tensor.dims->size != 1) {
+      TF_LITE_MAYBE_KERNEL_LOG(context,
+                               "unexpected number of shape dimensions (%d) in "
+                               "axes tensor #%d in node #%d: "
+                               "expected a 1D tensor",
+                               tensor.dims->size, tensor_index, node_index);
+      return kTfLiteError;
+    }
+    return kTfLiteOk;
+  }
+
   static TfLiteStatus CheckShapeTensorShape(TfLiteContext* context,
                                             const TfLiteTensor& tensor,
                                             int tensor_index, int node_index) {
@@ -777,6 +791,14 @@ class Subgraph {
         return VisitMaxPool2DNode(builder, logging_context, node_index,
                                   node, context->tensors, pool_params,
                                   webnn_operands, constant_buffers);
+      }
+      case kTfLiteBuiltinMean: {
+        const TfLiteReducerParams* reducer_params =
+            static_cast<const TfLiteReducerParams*>(node->builtin_data);
+
+        return VisitMeanNode(builder, logging_context, node_index,
+                             node, context->tensors, reducer_params,
+                             webnn_operands, constant_buffers);
       }
       case kTfLiteBuiltinConcatenation: {
         const TfLiteConcatenationParams* concat_params =
@@ -1105,6 +1127,79 @@ class Subgraph {
     TF_LITE_ENSURE_STATUS(VisitActivation(
           builder, logging_context, node_index, output_tensor_id, output_tensor_id,
           pool_params->activation, webnn_operands, constant_buffers));
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitMeanNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteReducerParams* reducer_params,
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 2, 1, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, input_tensor, 4,
+                                           input_tensor_id));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int axes_tensor_id = node->inputs->data[1];
+    const TfLiteTensor& axes_tensor = tensors[axes_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorType(logging_context, axes_tensor,
+                                          kTfLiteInt32, axes_tensor_id,
+                                          node_index));
+    TF_LITE_ENSURE_STATUS(CheckAxesTensorShape(
+        logging_context, axes_tensor, axes_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+        logging_context, axes_tensor, axes_tensor_id, node_index));
+
+    if (axes_tensor.dims->data[0] != 2) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "unsupported MEAN reduction along %d axes in node %d",
+          axes_tensor.dims->data[0], node_index);
+      return kTfLiteError;
+    }
+
+    const int32_t* axes_data =
+        reinterpret_cast<const int32_t*>(axes_tensor.data.data);
+    if (std::min(axes_data[0], axes_data[1]) != 1 ||
+        std::max(axes_data[0], axes_data[1]) != 2) {
+      TF_LITE_MAYBE_KERNEL_LOG(logging_context,
+                               "unsupported MEAN reduction along non-spatial "
+                               "axes %d and %d in node %d",
+                               std::min(axes_data[0], axes_data[1]),
+                               std::max(axes_data[0], axes_data[1]),
+                               node_index);
+      return kTfLiteError;
+    }
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    const int expected_output_dims = reducer_params->keep_dims ? 4 : 2;
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, output_tensor,
+                                           expected_output_dims,
+                                           output_tensor_id));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    if (builder) {
+      ml::Operand output;
+      ml::ReduceOptions reduceOptions;
+      reduceOptions.axes = axes_data;
+      reduceOptions.axesCount = axes_tensor.dims->data[0];
+      reduceOptions.keepDimensions = reducer_params->keep_dims;
+      output = builder.ReduceMean(webnn_operands[input_tensor_id], &reduceOptions);
+      webnn_operands[output_tensor_id] = output;
+    }
 
     return kTfLiteOk;
   }
