@@ -453,16 +453,6 @@ class Subgraph {
       return kTfLiteError;
     }
 
-    if (params->filter_width == 1 && params->filter_height == 1 &&
-        std::max(params->stride_width, params->stride_height) > 1) {
-      TF_LITE_MAYBE_KERNEL_LOG(context,
-                               "unsupported pooling with 1x1 filter "
-                               "and %dx%d stride in node #%d",
-                               params->stride_width, params->stride_height,
-                               node_index);
-      return kTfLiteError;
-    }
-
     return kTfLiteOk;
   }
 
@@ -608,6 +598,39 @@ class Subgraph {
                             expected_num_dims, tensor_index);
   }
 
+  static TfLiteStatus CheckPaddingsTensorShape(TfLiteContext* context,
+                                               const TfLiteTensor& tensor,
+                                               int expected_rows,
+                                               int tensor_index,
+                                               int node_index) {
+    if (tensor.dims->size != 2) {
+      TF_LITE_MAYBE_KERNEL_LOG(context,
+                               "unexpected number of shape dimensions (%d) in "
+                               "padding tensor #%d in node #%d: "
+                               "expected a 2D tensor",
+                               tensor.dims->size, tensor_index, node_index);
+      return kTfLiteError;
+    }
+    if (tensor.dims->data[0] != expected_rows) {
+      TF_LITE_MAYBE_KERNEL_LOG(context,
+                               "unexpected number of rows (%d) in "
+                               "padding tensor #%d in node #%d: "
+                               "%d rows expected",
+                               tensor.dims->size, tensor_index, node_index,
+                               expected_rows);
+      return kTfLiteError;
+    }
+    if (tensor.dims->data[1] != 2) {
+      TF_LITE_MAYBE_KERNEL_LOG(context,
+                               "unexpected number of columns (%d) in "
+                               "padding tensor #%d in node #%d: "
+                               "2 columns expected",
+                               tensor.dims->size, tensor_index, node_index);
+      return kTfLiteError;
+    }
+    return kTfLiteOk;
+  }
+
   static TfLiteStatus CheckShapeTensorShape(TfLiteContext* context,
                                             const TfLiteTensor& tensor,
                                             int tensor_index, int node_index) {
@@ -736,6 +759,9 @@ class Subgraph {
         return VisitMulNode(builder, logging_context, node_index, node,
                             context->tensors, mul_params, webnn_operands, constant_buffers);
       }
+      case kTfLiteBuiltinPad:
+        return VisitPadNode(builder, logging_context, node_index, node,
+                            context->tensors, webnn_operands, constant_buffers);
       case kTfLiteBuiltinAveragePool2d: {
         const TfLitePoolParams* pool_params =
             static_cast<const TfLitePoolParams*>(node->builtin_data);
@@ -891,6 +917,85 @@ class Subgraph {
     return kTfLiteOk;
   }
 
+  static TfLiteStatus VisitPadNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 2, 1, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int padding_tensor_id = node->inputs->data[1];
+    const TfLiteTensor& paddings_tensor = tensors[padding_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorType(logging_context, paddings_tensor,
+                                          kTfLiteInt32, padding_tensor_id,
+                                          node_index));
+    TF_LITE_ENSURE_STATUS(CheckPaddingsTensorShape(
+        logging_context, paddings_tensor, input_tensor.dims->size,
+        padding_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+        logging_context, paddings_tensor, padding_tensor_id, node_index));
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    const int32_t* paddings_data =
+        reinterpret_cast<const int32_t*>(paddings_tensor.data.data);
+    for (int i = 0; i < paddings_tensor.dims->data[0]; i++) {
+      const int32_t pre_padding = paddings_data[i * 2 + 0];
+      if (pre_padding < 0) {
+        TF_LITE_MAYBE_KERNEL_LOG(
+            logging_context,
+            "invalid pre-padding %d for dimension #%d in node %d", pre_padding,
+            i, node_index);
+        return kTfLiteError;
+      }
+
+      const int32_t post_padding = paddings_data[i * 2 + 1];
+      if (post_padding < 0) {
+        TF_LITE_MAYBE_KERNEL_LOG(
+            logging_context,
+            "invalid post-padding %d for dimension #%d in node %d", pre_padding,
+            i, node_index);
+        return kTfLiteError;
+      }
+    }
+
+    if (builder) {
+      size_t rank = paddings_tensor.dims->data[0];
+      std::vector<int32_t> padding(rank * 2);
+      for (int i = 0; i < rank; i++) {
+        padding[i * 2 + 0] = static_cast<int32_t>(paddings_data[i * 2 + 0]);
+        padding[i * 2 + 1] = static_cast<int32_t>(paddings_data[i * 2 + 1]);
+      }
+      const size_t padding_buffer_length = sizeof(int32_t) * padding.size();
+      std::unique_ptr<char> padding_buffer(new char[padding_buffer_length]);
+      std::memcpy(padding_buffer.get(), padding.data(), padding_buffer_length);
+      std::vector<int32_t> dims = {static_cast<int32_t>(rank), 2};
+      ml::OperandDescriptor desc = {
+        ml::OperandType::Int32, dims.data(), static_cast<uint32_t>(dims.size())};
+      ml::ArrayBufferView padding_buffer_view = {padding_buffer.get(), padding_buffer_length};
+      ml::Operand padding_operand = builder.Constant(&desc, &padding_buffer_view);
+      constant_buffers.push_back(std::move(padding_buffer));
+
+      webnn_operands[output_tensor_id] =
+          builder.Pad(webnn_operands[input_tensor_id], padding_operand);
+    }
+
+    return kTfLiteOk;
+  }
+
   static TfLiteStatus VisitAveragePool2DNode(
       const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
       TfLiteNode* node, const TfLiteTensor* tensors,
@@ -982,23 +1087,18 @@ class Subgraph {
 
     if (builder) {
       ml::Operand output;
-      if (pool_params->filter_height == 1 && pool_params->filter_width == 1) {
-        // Only do activation.
-        output = webnn_operands[input_tensor_id];
-      } else {
-        ml::Pool2dOptions options;
-        options.autoPad = auto_pad;
-        std::vector<int32_t> strides = {
-            pool_params->stride_height, pool_params->stride_width};
-        options.strides = strides.data();
-        options.stridesCount = strides.size();
-        std::vector<int32_t> windowDimensions = {
-            pool_params->filter_height, pool_params->filter_width};
-        options.windowDimensions = windowDimensions.data();
-        options.windowDimensionsCount = windowDimensions.size();
-        options.layout = ml::InputOperandLayout::Nhwc;
-        output = builder.MaxPool2d(webnn_operands[input_tensor_id], &options);
-      }
+      ml::Pool2dOptions options;
+      options.autoPad = auto_pad;
+      std::vector<int32_t> strides = {
+          pool_params->stride_height, pool_params->stride_width};
+      options.strides = strides.data();
+      options.stridesCount = strides.size();
+      std::vector<int32_t> windowDimensions = {
+          pool_params->filter_height, pool_params->filter_width};
+      options.windowDimensions = windowDimensions.data();
+      options.windowDimensionsCount = windowDimensions.size();
+      options.layout = ml::InputOperandLayout::Nhwc;
+      output = builder.MaxPool2d(webnn_operands[input_tensor_id], &options);
       webnn_operands[output_tensor_id] = output;
     }
 
