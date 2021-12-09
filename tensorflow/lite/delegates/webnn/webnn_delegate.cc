@@ -1763,29 +1763,17 @@ class Subgraph {
     }
 
     if (builder) {
-      // Transpose NHWC to NCHW
-      std::vector<int32_t> nhwc_to_nchw = {0, 3, 1, 2};
-      ml::TransposeOptions transpose_options;
-      transpose_options.permutation = nhwc_to_nchw.data();
-      transpose_options.permutationCount = nhwc_to_nchw.size();
-      TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
-      ml::Operand input_operand = builder.Transpose(webnn_operands[input_tensor_id], &transpose_options);
-      std::vector<int32_t> new_sizes = {
-        input_tensor.dims->data[0],
-        input_tensor.dims->data[3],
-        shape_data[0],
-        shape_data[1]
-      };
-      ml::ResampleOptions options;
+      ml::Operand input_operand = webnn_operands[input_tensor_id];
+      TF_LITE_ENSURE(logging_context, input_operand);
+      std::vector<int32_t> sizes = {shape_data[0], shape_data[1]};
+      std::vector<int32_t> axes = {1, 2};
+      ml::Resample2dOptions options;
       options.mode = ml::InterpolationMode::Linear;
-      options.sizes = new_sizes.data();
-      options.sizesCount = new_sizes.size();
-      ml::Operand output = builder.Resample(input_operand, &options);
-      // Transpose NCHW to NHWC
-      std::vector<int32_t> nchw_to_nhwc = {0, 2, 3, 1};
-      transpose_options.permutation = nchw_to_nhwc.data();
-      transpose_options.permutationCount = nchw_to_nhwc.size();
-      webnn_operands[output_tensor_id] = builder.Transpose(output, &transpose_options);
+      options.sizes = sizes.data();
+      options.sizesCount = sizes.size();
+      options.axes = axes.data();
+      options.axesCount = axes.size();
+      webnn_operands[output_tensor_id] = builder.Resample2d(input_operand, &options);
       TF_LITE_ENSURE(logging_context, webnn_operands[output_tensor_id]);
     }
 
