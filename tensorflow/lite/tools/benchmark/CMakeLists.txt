@@ -52,6 +52,12 @@ else()
   set(TFLITE_BENCHMARK_CC_OPTIONS "-DTFLITE_WITHOUT_XNNPACK")
 endif()  # TFLITE_ENABLE_XNNPACK
 
+if(TFLITE_ENABLE_EXTERNAL_DELEGATE)
+  list(APPEND TFLITE_BENCHMARK_SRCS
+    ${TFLITE_SOURCE_DIR}/tools/delegates/external_delegate_provider.cc
+  )
+endif()  # TFLITE_ENABLE_EXTERNAL_DELEGATE
+
 if(TFLITE_ENABLE_WEBNN)
   list(APPEND TFLITE_BENCHMARK_SRCS
     ${TFLITE_SOURCE_DIR}/tools/delegates/webnn_delegate_provider.cc
