@@ -142,6 +142,7 @@ ExternalDelegateWrapper::ExternalDelegateWrapper(
       ckeys.push_back(options->keys[i]);
       cvalues.push_back(options->values[i]);
     }
+
     external_delegate_ = external_lib_.create(ckeys.data(), cvalues.data(),
                                               ckeys.size(), nullptr);
     if (external_delegate_) {

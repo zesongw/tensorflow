@@ -32,7 +32,6 @@ cc_library(
         "//tensorflow/lite/schema:schema_fbs",
         "//tensorflow/lite/tools/optimize/sparsity:format_converter",
         "@webnn_native_project//:webnn-native",
-        "@webnn_native_project//:webnn-native-1",
         "@FP16",
     ],
 )
@@ -41,7 +40,6 @@ cc_binary(
     name = "webnn_external_delegate.so",
     srcs = [
         "webnn_delegate_adaptor.cc",
-        "webnn_cpp.cpp",
     ],
     linkshared = 1,
     linkstatic = 1,

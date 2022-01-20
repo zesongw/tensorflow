@@ -22,8 +22,6 @@ load("@//tensorflow:workspace0.bzl", "tf_workspace0")
 
 tf_workspace0()
 
-new_local_repository(
-    name = "webnn_native_project",
-    path = "/home/wm/work/webml/webnn/webnn-native",
-    build_file = "third_party/webnn/webnn_native.BUILD",
-)
+load("//third_party/webnn:webnn.bzl", "webnn_configure")
+
+webnn_configure(name = "webnn_native_project")
