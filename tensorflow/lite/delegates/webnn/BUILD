@@ -42,7 +42,6 @@ cc_binary(
         "webnn_delegate_adaptor.cc",
     ],
     linkshared = 1,
-    linkstatic = 1,
     deps = [
         ":webnn_delegate",
         "//tensorflow/lite/c:common",
