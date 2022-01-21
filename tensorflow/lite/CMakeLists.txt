@@ -312,8 +312,8 @@ if(TFLITE_ENABLE_XNNPACK)
 endif()
 if(TFLITE_ENABLE_WEBNN)
   include_directories(
-    "$ENV{WEBNN_NATIVE_DIR}/gen/src/include"
-    "$ENV{WEBNN_NATIVE_DIR}/../../src/include"
+    "$ENV{WEBNN_NATIVE_DIR}/out/Release/gen/src/include"
+    "$ENV{WEBNN_NATIVE_DIR}/src/include"
   )
   populate_tflite_source_vars("delegates/webnn"
     TFLITE_DELEGATES_WEBNN_SRCS

@@ -62,7 +62,7 @@ if(TFLITE_ENABLE_WEBNN)
   list(APPEND TFLITE_BENCHMARK_SRCS
     ${TFLITE_SOURCE_DIR}/tools/delegates/webnn_delegate_provider.cc
   )
-  list(APPEND TFLITE_BENCHMARK_SRCS "$ENV{WEBNN_NATIVE_DIR}/gen/src/webnn/webnn_cpp.cpp")
+  list(APPEND TFLITE_BENCHMARK_SRCS "$ENV{WEBNN_NATIVE_DIR}/out/Release/gen/src/webnn/webnn_cpp.cpp")
   link_directories(
     "$ENV{WEBNN_NATIVE_DIR}"
   )
@@ -103,8 +103,8 @@ target_link_libraries(benchmark_model
 if(TFLITE_ENABLE_WEBNN)
   if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_link_libraries(benchmark_model
-      $ENV{WEBNN_NATIVE_DIR}/webnn_native.dll.lib
-      $ENV{WEBNN_NATIVE_DIR}/webnn_proc.dll.lib
+      $ENV{WEBNN_NATIVE_DIR}/out/Release/webnn_native.dll.lib
+      $ENV{WEBNN_NATIVE_DIR}/out/Release/webnn_proc.dll.lib
     )
   else()
     target_link_libraries(benchmark_model
