@@ -32,7 +32,7 @@ struct ExternalLib {
 
   // Open a given delegate library and load the create/destroy symbols
   bool load(const std::string library) {
-    void* handle = SharedLibrary::LoadLibrary(library.c_str());
+    void* handle = SharedLibrary::LoadLibrary((const wchar_t*)library.c_str());
     if (handle == nullptr) {
       TFLITE_LOG(TFLITE_LOG_INFO, "Unable to load external delegate from : %s",
                  library.c_str());
