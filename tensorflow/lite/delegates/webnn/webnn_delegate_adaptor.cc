@@ -15,10 +15,9 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "tensorflow/lite/c/common.h"
-#include "tensorflow/lite/delegates/webnn/webnn_delegate.h"
 #include "tensorflow/lite/tools/command_line_flags.h"
 #include "tensorflow/lite/tools/logging.h"
+#include "tensorflow/lite/delegates/webnn/webnn_delegate_adaptor.h"
 
 namespace tflite {
 namespace tools {
@@ -70,14 +69,14 @@ extern "C" {
 
 // Defines two symbols that need to be exported to use the TFLite external
 // delegate. See tensorflow/lite/delegates/external for details.
-TFL_CAPI_EXPORT TfLiteDelegate* tflite_plugin_create_delegate(
+TfLiteDelegate* tflite_plugin_create_delegate(
     char** options_keys, char** options_values, size_t num_options,
     void (*report_error)(const char*)) {
   return tflite::tools::CreateTfLiteWebNNDelegateFromOptions(
       options_keys, options_values, num_options);
 }
 
-TFL_CAPI_EXPORT void tflite_plugin_destroy_delegate(TfLiteDelegate* delegate) {
+void tflite_plugin_destroy_delegate(TfLiteDelegate* delegate) {
   TfLiteWebNNDelegateDelete(delegate);
 }
 

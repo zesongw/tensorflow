@@ -16,10 +16,21 @@ cc_library(
         "webnn-native/out/Release/gen/src/include/**/*.h",
         "webnn-native/src/include/*/*.h"
     ]),
-    srcs = glob([
-        "webnn-native/out/Release/*.so",
-        "webnn-native/out/Release/gen/src/webnn/webnn_cpp.cpp"
-    ]),
+    srcs = select({
+        "@bazel_tools//src/conditions:windows": glob([
+            "webnn-native/out/Release/webnn_native.dll",
+            "webnn-native/out/Release/webnn_native.dll.lib",
+            "webnn-native/out/Release/webnn_proc.dll",
+            "webnn-native/out/Release/webnn_proc.dll.lib",
+            "webnn-native/out/Release/gen/src/webnn/webnn_cpp.cpp"
+        ]),
+        "//conditions:default":glob([
+            "webnn-native/out/Release/libngraph_c_api.so",
+            "webnn-native/out/Release/libwebnn_native.so",
+            "webnn-native/out/Release/libwebnn_proc.so",
+            "webnn-native/out/Release/gen/src/webnn/webnn_cpp.cpp"
+        ]),
+    }),
     includes = [
         "webnn-native/out/Release/gen/src/include",
         "webnn-native/src/include"

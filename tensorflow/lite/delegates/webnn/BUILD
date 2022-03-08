@@ -1,5 +1,6 @@
 load("//tensorflow/lite:special_rules.bzl", "tflite_portable_test_suite_combined")
 load("//tensorflow:tensorflow.bzl", "get_compatible_with_portable")
+load("//tensorflow/lite:build_def.bzl", "tflite_cc_shared_object")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -36,17 +37,41 @@ cc_library(
     ],
 )
 
-cc_binary(
-    name = "webnn_external_delegate.so",
-    srcs = [
-        "webnn_delegate_adaptor.cc",
-    ],
-    linkshared = 1,
+cc_library(
+    name = "webnn_delegate_adaptor",
+    srcs = ["webnn_delegate_adaptor.cc"],
+    hdrs =  ["webnn_delegate_adaptor.h"],
     deps = [
         ":webnn_delegate",
+        "//tensorflow/lite:shared_library",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/tools:command_line_flags",
         "//tensorflow/lite/tools:logging",
+    ],
+)
+
+tflite_cc_shared_object(
+    name = "webnn_external_delegate_obj",
+    linkopts = select({
+        "//tensorflow:windows": [
+            "-Wl,-exported_symbols_list,$(location //tensorflow/lite/c:exported_symbols.lds)",
+        ],
+        "//conditions:default": [
+            "-Wl,-z,defs",
+            "-Wl,--version-script,$(location //tensorflow/lite:tflite_version_script.lds)",
+        ],
+    }),
+    per_os_targets = True,
+    srcs = select({
+        "//tensorflow:windows": [
+            "webnn_delegate_adaptor.cc",
+        ],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":webnn_delegate_adaptor",
+        "//tensorflow/lite/c:exported_symbols.lds",
+        "//tensorflow/lite:tflite_version_script.lds",
     ],
 )
 

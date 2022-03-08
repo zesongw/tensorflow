@@ -32,7 +32,7 @@ struct ExternalLib {
 
   // Open a given delegate library and load the create/destroy symbols
   bool load(const std::string library) {
-    void* handle = SharedLibrary::LoadLibrary((const wchar_t*)library.c_str());
+    void* handle = SharedLibrary::LoadLibrary(library.c_str());
     if (handle == nullptr) {
       TFLITE_LOG_PROD(tflite::TFLITE_LOG_ERROR, "Unable to load external delegate from : %s",
                       SharedLibrary::GetError());
@@ -146,14 +146,12 @@ ExternalDelegateWrapper::ExternalDelegateWrapper(
     external_delegate_ = external_lib_.create(ckeys.data(), cvalues.data(),
                                               ckeys.size(), nullptr);
     if (external_delegate_) {
-      wrapper_delegate_ = {
-          .data_ = reinterpret_cast<void*>(this),
-          .Prepare = DelegatePrepare,
-          .CopyFromBufferHandle = nullptr,
-          .CopyToBufferHandle = nullptr,
-          .FreeBufferHandle = nullptr,
-          .flags = external_delegate_->flags,
-      };
+      wrapper_delegate_.data_ = reinterpret_cast<void*>(this);
+      wrapper_delegate_.Prepare = DelegatePrepare;
+      wrapper_delegate_.CopyFromBufferHandle = nullptr;
+      wrapper_delegate_.CopyToBufferHandle = nullptr;
+      wrapper_delegate_.FreeBufferHandle = nullptr;
+      wrapper_delegate_.flags = external_delegate_->flags;
       if (external_delegate_->CopyFromBufferHandle) {
         wrapper_delegate_.CopyFromBufferHandle = DelegateCopyFromBufferHandle;
       }
