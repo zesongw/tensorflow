@@ -146,14 +146,12 @@ ExternalDelegateWrapper::ExternalDelegateWrapper(
     external_delegate_ = external_lib_.create(ckeys.data(), cvalues.data(),
                                               ckeys.size(), nullptr);
     if (external_delegate_) {
-      wrapper_delegate_ = {
-          .data_ = reinterpret_cast<void*>(this),
-          .Prepare = DelegatePrepare,
-          .CopyFromBufferHandle = nullptr,
-          .CopyToBufferHandle = nullptr,
-          .FreeBufferHandle = nullptr,
-          .flags = external_delegate_->flags,
-      };
+      wrapper_delegate_.data_ = reinterpret_cast<void*>(this);
+      wrapper_delegate_.Prepare = DelegatePrepare;
+      wrapper_delegate_.CopyFromBufferHandle = nullptr;
+      wrapper_delegate_.CopyToBufferHandle = nullptr;
+      wrapper_delegate_.FreeBufferHandle = nullptr;
+      wrapper_delegate_.flags = external_delegate_->flags;
       if (external_delegate_->CopyFromBufferHandle) {
         wrapper_delegate_.CopyFromBufferHandle = DelegateCopyFromBufferHandle;
       }

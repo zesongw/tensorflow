@@ -13,6 +13,11 @@
 # limitations under the License.
 # ==============================================================================
 
+load(
+    "//tensorflow/lite:build_def.bzl",
+    "tflite_cc_shared_object",
+)
+
 package(
     default_visibility = [
         "//visibility:public",
@@ -28,6 +33,31 @@ cc_library(
         "//tensorflow/lite:minimal_logging",
         "//tensorflow/lite:shared_library",
         "//tensorflow/lite/c:common",
+    ],
+)
+
+tflite_cc_shared_object(
+    name = "external_delegate_obj",
+    linkopts = select({
+        "//tensorflow:ios": [
+            "-Wl,-exported_symbols_list,$(location //tensorflow/lite/c:exported_symbols.lds)",
+        ],
+        "//tensorflow:macos": [
+            "-Wl,-exported_symbols_list,$(location //tensorflow/lite/c:exported_symbols.lds)",
+        ],
+        "//tensorflow:windows": [
+            "-Wl,-exported_symbols_list,$(location //tensorflow/lite/c:exported_symbols.lds)",
+        ],
+        "//conditions:default": [
+            "-z defs",
+            "-Wl,--version-script,$(location //tensorflow/lite/c:version_script.lds)",
+        ],
+    }),
+    per_os_targets = True,
+    deps = [
+        ":external_delegate",
+        "//tensorflow/lite/c:exported_symbols.lds",
+        "//tensorflow/lite/c:version_script.lds",
     ],
 )
 
