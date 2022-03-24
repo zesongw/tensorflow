@@ -185,6 +185,15 @@ class Subgraph {
             tensors[t] = t;
           }
           break;
+        case kTfLiteBuiltinSplit:
+          // Ignore the first input (axis),
+          // because it is represented as parameters of the WebNN operator
+          // rather than extra input.
+          {
+            const int t = node->inputs->data[1];
+            tensors[t] = t;
+          }
+          break;
         default:
           // All other operators: process all inputs
           for (int k = 0; k < node->inputs->size; k++) {
@@ -443,6 +452,26 @@ class Subgraph {
     if (params->stride_height <= 0) {
       TF_LITE_MAYBE_KERNEL_LOG(context, "invalid stride height %d in node #%d",
                                params->stride_height, node_index);
+      return kTfLiteError;
+    }
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus CheckFullyConnectedParams(
+      TfLiteContext* context, const TfLiteFullyConnectedParams* params,
+      int node_index) {
+    if (params->weights_format != kTfLiteFullyConnectedWeightsFormatDefault) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          context, "unsupported non-default weights format in node #%d",
+          node_index);
+      return kTfLiteError;
+    }
+
+    if (params->asymmetric_quantize_inputs) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          context, "unsupported asymmetric quantize inputs in node #%d",
+          node_index);
       return kTfLiteError;
     }
 
@@ -745,20 +774,20 @@ class Subgraph {
         }
         return kTfLiteOk;
       case kTfLiteActTanh:
-        TF_LITE_MAYBE_KERNEL_LOG(
-            context, "unsupported fused activation (Tanh) in node #%d",
-            node_index);
-        return kTfLiteError;
+        if (builder) {
+          webnn_operands[output_tensor_id] = builder.Tanh(webnn_operands[input_tensor_id]);
+        }
+        return kTfLiteOk;
       case kTfLiteActSignBit:
         TF_LITE_MAYBE_KERNEL_LOG(
             context, "unsupported fused activation (Sign) in node #%d",
             node_index);
         return kTfLiteError;
       case kTfLiteActSigmoid:
-        TF_LITE_MAYBE_KERNEL_LOG(
-            context, "unsupported fused activation (Sigmoid) in node #%d",
-            node_index);
-        return kTfLiteError;
+        if (builder) {
+          webnn_operands[output_tensor_id] = builder.Sigmoid(webnn_operands[input_tensor_id]);
+        }
+        return kTfLiteOk;
       default:
         TF_LITE_MAYBE_KERNEL_LOG(context,
                                  "invalid fused activation (%d) in node #%d",
@@ -845,6 +874,14 @@ class Subgraph {
                                         node, context->tensors, dwconv_params,
                                         quasi_static_tensors, webnn_operands, constant_buffers);
       }
+      case kTfLiteBuiltinFullyConnected: {
+        const TfLiteFullyConnectedParams* fc_params =
+            static_cast<const TfLiteFullyConnectedParams*>(node->builtin_data);
+
+        return VisitFullyConnectedNode(builder, logging_context, node_index, node,
+                                       context->tensors, fc_params, quasi_static_tensors,
+                                       webnn_operands, constant_buffers);
+      }
       case kTfLiteBuiltinHardSwish:
         return VisitHardSwishNode(builder, logging_context, node_index, node,
                                   context->tensors, webnn_operands);
@@ -876,6 +913,16 @@ class Subgraph {
         return VisitSoftmaxNode(builder, logging_context, node_index, node,
                                 context->tensors, softmax_params, webnn_operands);
       }
+      case kTfLiteBuiltinSplit: {
+        const TfLiteSplitParams* split_params =
+            static_cast<const TfLiteSplitParams*>(node->builtin_data);
+
+        return VisitSplitNode(builder, logging_context, node_index, node,
+                                context->tensors, split_params, webnn_operands);
+      }
+      case kTfLiteBuiltinTanh:
+        return VisitTanhNode(builder, logging_context, node_index, node,
+                             context->tensors, webnn_operands);
       case kTfLiteBuiltinCustom: {
         if (strcmp(registration->custom_name, "Convolution2DTransposeBias") ==
             0) {
@@ -1361,7 +1408,7 @@ class Subgraph {
       TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
       TF_LITE_ENSURE(logging_context, webnn_operands[filter_tensor_id]);
       ml::Operand output =
-          builder.Conv2d(webnn_operands[input_tensor_id], 
+          builder.Conv2d(webnn_operands[input_tensor_id],
                          webnn_operands[filter_tensor_id],
                          &options);
       if (bias_tensor_id >= 0) {
@@ -1453,7 +1500,7 @@ class Subgraph {
       TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
       TF_LITE_ENSURE(logging_context, webnn_operands[filter_tensor_id]);
       ml::Operand output =
-          builder.Conv2d(webnn_operands[input_tensor_id], 
+          builder.Conv2d(webnn_operands[input_tensor_id],
                          webnn_operands[filter_tensor_id],
                          &options);
       if (bias_tensor_id >= 0) {
@@ -1559,6 +1606,157 @@ class Subgraph {
     TF_LITE_ENSURE_STATUS(VisitActivation(
         builder, logging_context, node_index, output_tensor_id, output_tensor_id,
         dwconv_params->activation, webnn_operands, constant_buffers));
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitFullyConnectedNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteFullyConnectedParams* fc_params,
+      const std::unordered_set<int>& quasi_static_tensors,
+      std::vector<ml::Operand>& webnn_operands,
+      std::vector<std::unique_ptr<char>>& constant_buffers) {
+    TF_LITE_ENSURE_STATUS(
+        CheckFullyConnectedParams(logging_context, fc_params, node_index));
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 2, 3, 1, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int filter_tensor_id = node->inputs->data[1];
+    const TfLiteTensor& filter_tensor = tensors[filter_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, filter_tensor, filter_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, filter_tensor, 2,
+                                           filter_tensor_id));
+    if (quasi_static_tensors.count(filter_tensor_id) == 0) {
+      TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+          logging_context, filter_tensor, filter_tensor_id, node_index));
+    }
+
+    int bias_tensor_id = -1;
+    if (node->inputs->size >= 3) {
+      bias_tensor_id = node->inputs->data[2];
+      if (bias_tensor_id >= 0) {
+        const TfLiteTensor& bias_tensor = tensors[bias_tensor_id];
+        TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt32Type(
+            logging_context, bias_tensor, bias_tensor_id, node_index));
+        TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, bias_tensor, 1,
+                                               bias_tensor_id));
+        if (quasi_static_tensors.count(bias_tensor_id) == 0) {
+          TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+              logging_context, bias_tensor, bias_tensor_id, node_index));
+        }
+      }
+    }
+
+    const int output_tensor_id = node->outputs->data[0];
+    const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, output_tensor, output_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, output_tensor_id, node_index));
+
+    const int32_t output_channels = filter_tensor.dims->data[0];
+    const int32_t input_channels = filter_tensor.dims->data[1];
+
+    if (input_tensor.dims->size == 0) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "unexpected number of shape dimensions %d in tensor #%d",
+          input_tensor.dims->size, input_tensor_id);
+      return kTfLiteError;
+    }
+
+    int32_t num_input_elements = 1;
+    for (int i = 0; i < input_tensor.dims->size; i++) {
+      if (input_tensor.dims->data[i] <= 0) {
+        TF_LITE_MAYBE_KERNEL_LOG(
+            logging_context, "invalid dimension #%d (%d) in tensor #%d", i,
+            input_tensor.dims->data[i], input_tensor_id);
+        return kTfLiteError;
+      }
+      num_input_elements *= input_tensor.dims->data[i];
+    }
+
+    if (fc_params->keep_num_dims) {
+      TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, output_tensor,
+                                             input_tensor.dims->size,
+                                             output_tensor_id));
+
+      for (int i = 0; i < input_tensor.dims->size - 1; i++) {
+        if (input_tensor.dims->data[i] != output_tensor.dims->data[i]) {
+          TF_LITE_MAYBE_KERNEL_LOG(
+              logging_context,
+              "mismatch in shape dimension %d (%d != %d) in input and output "
+              "tensors of FULLY_CONNECTED operator #%d",
+              i, input_tensor.dims->data[i], output_tensor.dims->data[i],
+              node_index);
+          return kTfLiteError;
+        }
+      }
+    } else {
+      if (num_input_elements % input_channels != 0) {
+        TF_LITE_MAYBE_KERNEL_LOG(
+            logging_context,
+            "number of elements in input tensor #%d in FULLY_CONNECTED "
+            "operator is not divisible by input channels (%d)",
+            input_tensor_id, input_channels);
+        return kTfLiteError;
+      }
+
+      TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, output_tensor, 2,
+                                             output_tensor_id));
+
+      if (output_tensor.dims->data[0] != num_input_elements / input_channels) {
+        TF_LITE_MAYBE_KERNEL_LOG(
+            logging_context,
+            "batch size %d in output tensor #%d in FULLY_CONNECTED operator "
+            "does not match batch size %d in reshaped input tensor #%d",
+            output_tensor.dims->data[0], output_tensor_id,
+            num_input_elements / input_channels, input_tensor_id);
+        return kTfLiteError;
+      }
+    }
+
+    if (output_tensor.dims->data[output_tensor.dims->size - 1] !=
+        output_channels) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "number of channels %d in output tensor #%d does not match output "
+          "channels %d in filter tensor #%d",
+          output_tensor.dims->data[output_tensor.dims->size - 1],
+          output_tensor_id, output_channels, filter_tensor_id);
+      return kTfLiteError;
+    }
+
+    if (builder) {
+      ml::GemmOptions options;
+      options.aTranspose = false;
+      options.bTranspose = true;
+      if (bias_tensor_id >= 0) {
+        TF_LITE_ENSURE(logging_context, webnn_operands[bias_tensor_id]);
+        options.c = webnn_operands[bias_tensor_id];
+      }
+      TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
+      TF_LITE_ENSURE(logging_context, webnn_operands[filter_tensor_id]);
+      ml::Operand output =
+          builder.Gemm(webnn_operands[input_tensor_id],
+                         webnn_operands[filter_tensor_id],
+                         &options);
+      webnn_operands[output_tensor_id] = output;
+      TF_LITE_ENSURE(logging_context, webnn_operands[output_tensor_id]);
+    }
+
+    TF_LITE_ENSURE_STATUS(VisitActivation(
+        builder, logging_context, node_index, output_tensor_id, output_tensor_id,
+        fc_params->activation, webnn_operands, constant_buffers));
 
     return kTfLiteOk;
   }
@@ -1815,6 +2013,117 @@ class Subgraph {
       TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
       webnn_operands[output_tensor_id] = builder.Softmax(webnn_operands[input_tensor_id]);
       TF_LITE_ENSURE(logging_context, webnn_operands[output_tensor_id]);
+    }
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitSplitNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteSplitParams* params,
+      std::vector<ml::Operand>& webnn_operands) {
+    const int num_splits = params->num_splits;
+    if (num_splits == 0) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "unexpected value of num_splits %d in the split params in node %d",
+          num_splits, node_index);
+      return kTfLiteError;
+    }
+
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 2, num_splits, node_index));
+
+    const int input_tensor_id = node->inputs->data[1];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int axis_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& axis_tensor = tensors[axis_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorType(logging_context, axis_tensor,
+                                          kTfLiteInt32, axis_tensor_id,
+                                          node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorShape(logging_context, axis_tensor, 0,
+                                           axis_tensor_id));
+    TF_LITE_ENSURE_STATUS(CheckTensorStaticAllocation(
+        logging_context, axis_tensor, axis_tensor_id, node_index));
+
+    const int* axis_data =
+        reinterpret_cast<const int*>(axis_tensor.data.data);
+    int axis_value = axis_data[0];
+
+    const int num_dims = input_tensor.dims->size;
+    if (axis_value < 0) {
+      axis_value += num_dims;
+    }
+    if (axis_value < 0 || axis_value > num_dims) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "unexpected data of axis %d in the axis tensor in node %d",
+          axis_data[0], node_index);
+      return kTfLiteError;
+    }
+    const int input_size = input_tensor.dims->data[axis_value];
+    if (input_size % num_splits != 0) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "Not an even split");
+      return kTfLiteError;
+    }
+
+    const int output_size = node->outputs->size;
+
+    if (builder) {
+      std::vector<uint32_t> splits = {static_cast<const uint32_t>(num_splits)};
+      ml::SplitOptions options;
+      options.axis = static_cast<const uint32_t>(axis_value);
+      TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
+      ml::OperandArray split_operand_array = builder.Split(
+          webnn_operands[input_tensor_id], splits.data(), splits.size(), &options);
+      TF_LITE_ENSURE(logging_context, split_operand_array.Size() == output_size);
+
+      for (int i = 0; i < output_size; i++) {
+        int output_tensor_id = node->outputs->data[i];
+        const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+        TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+            logging_context, output_tensor, output_tensor_id, node_index));
+        TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+            logging_context, output_tensor, output_tensor_id, node_index));
+        webnn_operands[output_tensor_id] = split_operand_array.Get(i);
+        TF_LITE_ENSURE(logging_context, webnn_operands[output_tensor_id]);
+      }
+    }
+
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitTanhNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      std::vector<ml::Operand>& webnn_operands) {
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 1, 1, node_index));
+
+    const TfLiteTensor& input_tensor = tensors[node->inputs->data[0]];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, input_tensor, node->inputs->data[0], node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, node->inputs->data[0], node_index));
+
+    const TfLiteTensor& output_tensor = tensors[node->outputs->data[0]];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, output_tensor, node->outputs->data[0], node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, output_tensor, node->outputs->data[0], node_index));
+
+    if (builder) {
+      TF_LITE_ENSURE(logging_context, webnn_operands[node->inputs->data[0]]);
+      webnn_operands[node->outputs->data[0]] = builder.Tanh(webnn_operands[node->inputs->data[0]]);
+      TF_LITE_ENSURE(logging_context, webnn_operands[node->outputs->data[0]]);
     }
 
     return kTfLiteOk;
