@@ -1673,16 +1673,16 @@ class Subgraph {
           input_tensor.dims->size, input_tensor_id);
       return kTfLiteError;
     }
-
+    const int32_t * input_dims_data = input_tensor.dims->data;
     int32_t num_input_elements = 1;
     for (int i = 0; i < input_tensor.dims->size; i++) {
-      if (input_tensor.dims->data[i] <= 0) {
+      if (input_dims_data[i] <= 0) {
         TF_LITE_MAYBE_KERNEL_LOG(
             logging_context, "invalid dimension #%d (%d) in tensor #%d", i,
-            input_tensor.dims->data[i], input_tensor_id);
+            input_dims_data[i], input_tensor_id);
         return kTfLiteError;
       }
-      num_input_elements *= input_tensor.dims->data[i];
+      num_input_elements *= input_dims_data[i];
     }
 
     if (fc_params->keep_num_dims) {
@@ -1691,12 +1691,12 @@ class Subgraph {
                                              output_tensor_id));
 
       for (int i = 0; i < input_tensor.dims->size - 1; i++) {
-        if (input_tensor.dims->data[i] != output_tensor.dims->data[i]) {
+        if (input_dims_data[i] != output_tensor.dims->data[i]) {
           TF_LITE_MAYBE_KERNEL_LOG(
               logging_context,
               "mismatch in shape dimension %d (%d != %d) in input and output "
               "tensors of FULLY_CONNECTED operator #%d",
-              i, input_tensor.dims->data[i], output_tensor.dims->data[i],
+              i, input_dims_data[i], output_tensor.dims->data[i],
               node_index);
           return kTfLiteError;
         }
@@ -1746,10 +1746,25 @@ class Subgraph {
       }
       TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
       TF_LITE_ENSURE(logging_context, webnn_operands[filter_tensor_id]);
-      ml::Operand output =
-          builder.Gemm(webnn_operands[input_tensor_id],
-                         webnn_operands[filter_tensor_id],
-                         &options);
+      ml::Operand output;
+      if (fc_params->keep_num_dims || input_tensor.dims->size > 2) {
+        // Reshape input to 2D tensor
+        const int32_t n_inputs =
+            static_cast<const int32_t>(input_dims_data[input_tensor.dims->size -1]);
+        std::vector<int32_t> new_input_shape = {-1, n_inputs};
+        ml::Operand reshaped_input =
+            builder.Reshape(webnn_operands[input_tensor_id],
+                            new_input_shape.data(), new_input_shape.size());
+        ml::Operand gemm = builder.Gemm(reshaped_input,
+                                        webnn_operands[filter_tensor_id],
+                                        &options);
+        output = builder.Reshape(gemm, &output_tensor.dims->data[0],
+                                 output_tensor.dims->size);
+      } else {
+        output = builder.Gemm(webnn_operands[input_tensor_id],
+                              webnn_operands[filter_tensor_id], &options);
+      }
+
       webnn_operands[output_tensor_id] = output;
       TF_LITE_ENSURE(logging_context, webnn_operands[output_tensor_id]);
     }
