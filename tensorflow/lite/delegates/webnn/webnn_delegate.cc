@@ -923,6 +923,13 @@ class Subgraph {
       case kTfLiteBuiltinTanh:
         return VisitTanhNode(builder, logging_context, node_index, node,
                              context->tensors, webnn_operands);
+      case kTfLiteBuiltinUnpack: {
+        const TfLiteUnpackParams* unpack_params =
+            static_cast<const TfLiteUnpackParams*>(node->builtin_data);
+
+        return VisitUnpackNode(builder, logging_context, node_index, node,
+                               context->tensors, unpack_params, webnn_operands);
+      }
       case kTfLiteBuiltinCustom: {
         if (strcmp(registration->custom_name, "Convolution2DTransposeBias") ==
             0) {
@@ -2141,6 +2148,90 @@ class Subgraph {
       TF_LITE_ENSURE(logging_context, webnn_operands[node->outputs->data[0]]);
     }
 
+    return kTfLiteOk;
+  }
+
+  static TfLiteStatus VisitUnpackNode(
+      const ml::GraphBuilder& builder, TfLiteContext* logging_context, int node_index,
+      TfLiteNode* node, const TfLiteTensor* tensors,
+      const TfLiteUnpackParams* params,
+      std::vector<ml::Operand>& webnn_operands) {
+    const int num = params->num;
+    int axis = params->axis;
+
+    TF_LITE_ENSURE_STATUS(
+        CheckNumInputsAndOutputs(logging_context, node, 1, num, node_index));
+
+    const int input_tensor_id = node->inputs->data[0];
+    const TfLiteTensor& input_tensor = tensors[input_tensor_id];
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQInt8Type(
+        logging_context, input_tensor, input_tensor_id, node_index));
+    TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+        logging_context, input_tensor, input_tensor_id, node_index));
+
+    const int num_dims = input_tensor.dims->size;
+    if (axis < 0) {
+      axis += num_dims;
+    }
+    if (axis < 0 || axis >= num_dims) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "unexpected value of axis %d in the unpack params in node %d",
+          axis, node_index);
+      return kTfLiteError;
+    }
+
+    const int output_size = node->outputs->size;
+
+    if (num != output_size) {
+      TF_LITE_MAYBE_KERNEL_LOG(
+          logging_context,
+          "unexpected value of num %d in the unpack params in node %d",
+          num, node_index);
+      return kTfLiteError;
+    }
+
+    if (builder) {
+      TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
+      ml::SqueezeOptions squeeze_options;
+      std::vector<int32_t> axes = {static_cast<int32_t>(axis)};
+      squeeze_options.axes = axes.data();
+      squeeze_options.axesCount = axes.size();
+      // Unpack = split + squeeze in WebNN
+      // No need split if Unpack's num == 1
+      if (num == 1) {
+        int output_tensor_id = node->outputs->data[0];
+        const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+        TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+            logging_context, output_tensor, output_tensor_id, node_index));
+        TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+            logging_context, output_tensor, output_tensor_id, node_index));
+
+        webnn_operands[output_tensor_id] =
+            builder.Squeeze(webnn_operands[input_tensor_id], &squeeze_options);
+        TF_LITE_ENSURE(logging_context, webnn_operands[output_tensor_id]);
+      } else {
+        std::vector<uint32_t> splits = {static_cast<const uint32_t>(num)};
+        ml::SplitOptions options;
+        options.axis = static_cast<const uint32_t>(axis);
+        ml::OperandArray split_operand_array = builder.Split(
+            webnn_operands[input_tensor_id], splits.data(), splits.size(), &options);
+        TF_LITE_ENSURE(logging_context, split_operand_array.Size() == output_size);
+
+        for (int i = 0; i < output_size; i++) {
+          int output_tensor_id = node->outputs->data[i];
+          const TfLiteTensor& output_tensor = tensors[output_tensor_id];
+          TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+              logging_context, output_tensor, output_tensor_id, node_index));
+          TF_LITE_ENSURE_STATUS(CheckTensorNonDynamicAllocation(
+              logging_context, output_tensor, output_tensor_id, node_index));
+
+          webnn_operands[output_tensor_id] =
+              builder.Squeeze(split_operand_array.Get(i), &squeeze_options);
+          TF_LITE_ENSURE(logging_context, webnn_operands[output_tensor_id]);
+        }
+      }
+    }
     return kTfLiteOk;
   }
 
