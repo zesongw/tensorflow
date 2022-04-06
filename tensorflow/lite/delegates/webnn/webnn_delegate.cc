@@ -42,7 +42,7 @@ limitations under the License.
 #include "tensorflow/lite/c/builtin_op_data.h"
 #include "tensorflow/lite/c/common.h"
 #include "tensorflow/lite/minimal_logging.h"
-#include "tensorflow/lite/tools/optimize/sparsity/format_converter.h"
+#include "tensorflow/lite/kernels/internal/utils/sparsity_format_converter.h"
 
 namespace tflite {
 namespace webnn {
@@ -2513,7 +2513,7 @@ TfLiteIntArray* Delegate::PrepareOpsToDelegate(TfLiteContext* context) {
           case kTfLiteFloat32: {
             const size_t dense_size = context->tensors[t].bytes / sizeof(float);
             float* unpacked_fp32_data = reinterpret_cast<float*>(unpacked_data);
-            tflite::optimize::sparsity::FormatConverter<float> converter(
+            tflite::internal::sparsity::FormatConverter<float> converter(
                 vector_shape, *input_tensor.sparsity);
             converter.SparseToDense(
                 static_cast<const float*>(input_tensor.data.data), dense_size,
@@ -2525,7 +2525,7 @@ TfLiteIntArray* Delegate::PrepareOpsToDelegate(TfLiteContext* context) {
                 context->tensors[t].bytes / sizeof(Eigen::half);
             Eigen::half* unpacked_fp16_data =
                 reinterpret_cast<Eigen::half*>(unpacked_data);
-            tflite::optimize::sparsity::FormatConverter<Eigen::half> converter(
+            tflite::internal::sparsity::FormatConverter<Eigen::half> converter(
                 vector_shape, *input_tensor.sparsity);
             converter.SparseToDense(
                 static_cast<const Eigen::half*>(input_tensor.data.data),
