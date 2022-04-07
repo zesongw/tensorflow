@@ -111,8 +111,8 @@ if(TFLITE_ENABLE_WEBNN)
     )
   else()
     target_link_libraries(benchmark_model
-      webnn_native
-      webnn_proc
+      $ENV{WEBNN_NATIVE_DIR}/out/Release/libwebnn_native.so
+      $ENV{WEBNN_NATIVE_DIR}/out/Release/libwebnn_proc.so
     )
   endif()
 endif()

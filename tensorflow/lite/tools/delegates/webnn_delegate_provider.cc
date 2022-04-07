@@ -32,6 +32,8 @@ class WebNNDelegateProvider : public DelegateProvider {
   void LogParams(const ToolParams& params, bool verbose) const final;
 
   TfLiteDelegatePtr CreateTfLiteDelegate(const ToolParams& params) const final;
+  std::pair<TfLiteDelegatePtr, int> CreateRankedTfLiteDelegate(
+      const ToolParams& params) const final;
 
   std::string GetName() const final { return "WebNN"; }
 };
@@ -56,7 +58,15 @@ TfLiteDelegatePtr WebNNDelegateProvider::CreateTfLiteDelegate(
   if (params.Get<bool>("use_webnn")) {
     return evaluation::CreateWebNNDelegate(params.Get<int>("webnn_device"));
   }
-  return TfLiteDelegatePtr(nullptr, [](TfLiteDelegate*) {});
+  return CreateNullDelegate();
+}
+
+std::pair<TfLiteDelegatePtr, int>
+WebNNDelegateProvider::CreateRankedTfLiteDelegate(
+    const ToolParams& params) const {
+  auto ptr = CreateTfLiteDelegate(params);
+  return std::make_pair(std::move(ptr),
+                        params.GetPosition<bool>("use_webnn"));
 }
 
 }  // namespace tools
