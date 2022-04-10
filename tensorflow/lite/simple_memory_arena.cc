@@ -169,10 +169,9 @@ TfLiteStatus SimpleMemoryArena::ReleaseBuffer() {
 }
 
 // Using weak symbols to create a pluggable debugging module.
-TFLITE_ATTRIBUTE_WEAK void DumpArenaInfo(
+extern void DumpArenaInfo(
     const std::string& name, const std::vector<int>& execution_plan,
-    size_t arena_size, const std::vector<ArenaAllocWithUsageInterval>& allocs) {
-}
+    size_t arena_size, const std::vector<ArenaAllocWithUsageInterval>& allocs);
 
 void SimpleMemoryArena::DumpDebugInfo(
     const std::string& name, const std::vector<int>& execution_plan) const {
