@@ -56,8 +56,8 @@ class Delegate {
 
  public:
   explicit Delegate(const TfLiteWebNNDelegateOptions* options) {
-    context_options_.devicePreference = static_cast<MLDevicePreference>(options->devicePreference);
-    context_options_.powerPreference = static_cast<MLPowerPreference>(options->powerPreference);
+    context_options_.devicePreference = static_cast<::ml::DevicePreference>(options->devicePreference);
+    context_options_.powerPreference = static_cast<::ml::PowerPreference>(options->powerPreference);
     std::unordered_map<uint32_t, std::string> device_preference_names = {
         {0, "Default"}, {1, "GPU"}, {2, "CPU"}};
     std::unordered_map<uint32_t, std::string> power_preference_names = {
@@ -65,8 +65,8 @@ class Delegate {
     TFLITE_LOG_PROD_ONCE(tflite::TFLITE_LOG_INFO,
                          "Created TensorFlow Lite WebNN delegate for device"
                          " %s and power %s.",
-                         device_preference_names[context_options_.devicePreference].c_str(),
-                         power_preference_names[context_options_.powerPreference].c_str());
+                         device_preference_names[options->devicePreference].c_str(),
+                         power_preference_names[options->powerPreference].c_str());
   }
 
   TfLiteIntArray* PrepareOpsToDelegate(TfLiteContext* context);
@@ -96,7 +96,7 @@ class Delegate {
   // Set of indices of tensors with unpacked static sparse weights.
   std::unordered_set<int> static_sparse_weights_;
 
-  MLContextOptions context_options_;
+  ::ml::ContextOptions context_options_;
 };
 
 class Subgraph {
@@ -127,9 +127,12 @@ class Subgraph {
 #ifdef __EMSCRIPTEN__
     ml::Context ml_context = emscripten_webnn_create_context(&(delegate->context_options_));
 #else
+    std::unique_ptr<webnn_native::Instance> instance;
+    instance = std::make_unique<webnn_native::Instance>();
     WebnnProcTable backend_procs = webnn_native::GetProcs();
     webnnProcSetProcs(&backend_procs);
-    ml::Context ml_context = ml::Context(webnn_native::CreateContext(&(delegate->context_options_)));
+    ::ml::Context ml_context = instance->CreateContext(&(delegate->context_options_));
+
 #endif
     if (!ml_context) {
       TF_LITE_KERNEL_LOG(context, "Failed to create WebNN context.");
@@ -1411,7 +1414,7 @@ class Subgraph {
       options.dilations = dilations.data();
       options.dilationsCount = dilations.size();
       options.inputLayout = ml::InputOperandLayout::Nhwc;
-      options.filterLayout = ml::FilterOperandLayout::Ohwi;
+      options.filterLayout = ml::Conv2dFilterOperandLayout::Ohwi;
       TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
       TF_LITE_ENSURE(logging_context, webnn_operands[filter_tensor_id]);
       ml::Operand output =
@@ -1495,19 +1498,18 @@ class Subgraph {
         logging_context, deconv_params->padding, auto_pad, node_index));
 
     if (builder) {
-      ml::Conv2dOptions options;
-      options.transpose = true;
+      ml::ConvTranspose2dOptions options;
       options.autoPad = auto_pad;
       std::vector<int32_t> strides = {
           deconv_params->stride_height, deconv_params->stride_width};
       options.strides = strides.data();
       options.stridesCount = strides.size();
       options.inputLayout = ml::InputOperandLayout::Nhwc;
-      options.filterLayout = ml::FilterOperandLayout::Ohwi;
+      options.filterLayout = ml::ConvTranspose2dFilterOperandLayout::Ohwi;
       TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
       TF_LITE_ENSURE(logging_context, webnn_operands[filter_tensor_id]);
       ml::Operand output =
-          builder.Conv2d(webnn_operands[input_tensor_id],
+          builder.ConvTranspose2d(webnn_operands[input_tensor_id],
                          webnn_operands[filter_tensor_id],
                          &options);
       if (bias_tensor_id >= 0) {
@@ -1594,7 +1596,7 @@ class Subgraph {
       options.dilations = dilations.data();
       options.dilationsCount = dilations.size();
       options.inputLayout = ml::InputOperandLayout::Nhwc;
-      options.filterLayout = ml::FilterOperandLayout::Ihwo;
+      options.filterLayout = ml::Conv2dFilterOperandLayout::Ihwo;
       options.groups = output_channels / dwconv_params->depth_multiplier;
       TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
       TF_LITE_ENSURE(logging_context, webnn_operands[filter_tensor_id]);
