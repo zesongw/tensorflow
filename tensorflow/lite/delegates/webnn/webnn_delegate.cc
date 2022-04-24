@@ -1170,6 +1170,7 @@ class Subgraph {
         options.windowDimensions = windowDimensions.data();
         options.windowDimensionsCount = windowDimensions.size();
         options.layout = wnn::InputOperandLayout::Nhwc;
+        options.roundingType = wnn::RoundingType::Floor;
         output = builder.AveragePool2d(webnn_operands[input_tensor_id], &options);
       }
       webnn_operands[output_tensor_id] = output;
@@ -1226,6 +1227,7 @@ class Subgraph {
       options.windowDimensions = windowDimensions.data();
       options.windowDimensionsCount = windowDimensions.size();
       options.layout = wnn::InputOperandLayout::Nhwc;
+      options.roundingType = wnn::RoundingType::Floor;
       TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
       output = builder.MaxPool2d(webnn_operands[input_tensor_id], &options);
       webnn_operands[output_tensor_id] = output;
