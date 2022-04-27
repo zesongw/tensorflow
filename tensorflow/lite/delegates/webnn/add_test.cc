@@ -45,7 +45,7 @@ TEST(Add, 4DBy4D) {
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_MUL, webnn_delegate.get());
+      .Test(BuiltinOperator_ADD, webnn_delegate.get());
 }
 
 TEST(Add, 4DBy4DBroadcastChannels) {
