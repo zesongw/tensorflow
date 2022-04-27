@@ -26,7 +26,7 @@ limitations under the License.
 namespace tflite {
 namespace webnn {
 
-TEST(Add, 4DBy4D) {
+TEST(Mul, 4DBy4D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -48,7 +48,7 @@ TEST(Add, 4DBy4D) {
       .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DBy4DBroadcastChannels) {
+TEST(Mul, 4DBy4DBroadcastChannels) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -67,15 +67,15 @@ TEST(Add, 4DBy4DBroadcastChannels) {
   BinaryElementwiseTester()
       .Input1Shape({1, 1, 1, channels})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({1, 1, 1, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DBy4DBroadcastWidth) {
+TEST(Mul, 4DBy4DBroadcastWidth) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -94,15 +94,15 @@ TEST(Add, 4DBy4DBroadcastWidth) {
   BinaryElementwiseTester()
       .Input1Shape({1, 1, width, 1})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({1, 1, width, 1})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DBy4DBroadcastHeight) {
+TEST(Mul, 4DBy4DBroadcastHeight) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -121,15 +121,15 @@ TEST(Add, 4DBy4DBroadcastHeight) {
   BinaryElementwiseTester()
       .Input1Shape({1, height, 1, 1})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({1, height, 1, 1})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DBy4DBroadcastBatch) {
+TEST(Mul, 4DBy4DBroadcastBatch) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -148,15 +148,15 @@ TEST(Add, 4DBy4DBroadcastBatch) {
   BinaryElementwiseTester()
       .Input1Shape({batch, 1, 1, 1})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, 1, 1, 1})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DBy4DBroadcastHeightWidthChannels) {
+TEST(Mul, 4DBy4DBroadcastHeightWidthChannels) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -175,15 +175,15 @@ TEST(Add, 4DBy4DBroadcastHeightWidthChannels) {
   BinaryElementwiseTester()
       .Input1Shape({1, height, width, channels})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({1, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DBy3D) {
+TEST(Mul, 4DBy3D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -202,15 +202,15 @@ TEST(Add, 4DBy3D) {
   BinaryElementwiseTester()
       .Input1Shape({height, width, channels})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DBy2D) {
+TEST(Mul, 4DBy2D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -229,15 +229,15 @@ TEST(Add, 4DBy2D) {
   BinaryElementwiseTester()
       .Input1Shape({width, channels})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DBy1D) {
+TEST(Mul, 4DBy1D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -256,15 +256,15 @@ TEST(Add, 4DBy1D) {
   BinaryElementwiseTester()
       .Input1Shape({channels})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DBy0D) {
+TEST(Mul, 4DBy0D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -283,15 +283,15 @@ TEST(Add, 4DBy0D) {
   BinaryElementwiseTester()
       .Input1Shape({})
       .Input2Shape({batch, height, width, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 2DBy2D) {
+TEST(Mul, 2DBy2D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -308,10 +308,10 @@ TEST(Add, 2DBy2D) {
   BinaryElementwiseTester()
       .Input1Shape({batch, channels})
       .Input2Shape({batch, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 2DBy1D) {
+TEST(Mul, 2DBy1D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -328,15 +328,15 @@ TEST(Add, 2DBy1D) {
   BinaryElementwiseTester()
       .Input1Shape({channels})
       .Input2Shape({batch, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, channels})
       .Input2Shape({channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 2DBy0D) {
+TEST(Mul, 2DBy0D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -353,15 +353,15 @@ TEST(Add, 2DBy0D) {
   BinaryElementwiseTester()
       .Input1Shape({})
       .Input2Shape({batch, channels})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, channels})
       .Input2Shape({})
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic4D) {
+TEST(Mul, 4DByStatic4D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -381,16 +381,16 @@ TEST(Add, 4DByStatic4D) {
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic4DBroadcastChannels) {
+TEST(Mul, 4DByStatic4DBroadcastChannels) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -410,16 +410,16 @@ TEST(Add, 4DByStatic4DBroadcastChannels) {
       .Input1Shape({1, 1, 1, channels})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({1, 1, 1, channels})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic4DBroadcastWidth) {
+TEST(Mul, 4DByStatic4DBroadcastWidth) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -439,16 +439,16 @@ TEST(Add, 4DByStatic4DBroadcastWidth) {
       .Input1Shape({1, 1, width, 1})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({1, 1, width, 1})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic4DBroadcastHeight) {
+TEST(Mul, 4DByStatic4DBroadcastHeight) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -468,16 +468,16 @@ TEST(Add, 4DByStatic4DBroadcastHeight) {
       .Input1Shape({1, height, 1, 1})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({1, height, 1, 1})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic4DBroadcastBatch) {
+TEST(Mul, 4DByStatic4DBroadcastBatch) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -497,16 +497,16 @@ TEST(Add, 4DByStatic4DBroadcastBatch) {
       .Input1Shape({batch, 1, 1, 1})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, 1, 1, 1})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic4DBroadcastHeightWidthChannels) {
+TEST(Mul, 4DByStatic4DBroadcastHeightWidthChannels) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -526,16 +526,16 @@ TEST(Add, 4DByStatic4DBroadcastHeightWidthChannels) {
       .Input1Shape({1, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({1, height, width, channels})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic3D) {
+TEST(Mul, 4DByStatic3D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -555,16 +555,16 @@ TEST(Add, 4DByStatic3D) {
       .Input1Shape({height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({height, width, channels})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic2D) {
+TEST(Mul, 4DByStatic2D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -584,16 +584,16 @@ TEST(Add, 4DByStatic2D) {
       .Input1Shape({width, channels})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({width, channels})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic1D) {
+TEST(Mul, 4DByStatic1D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -613,16 +613,16 @@ TEST(Add, 4DByStatic1D) {
       .Input1Shape({channels})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({channels})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 4DByStatic0D) {
+TEST(Mul, 4DByStatic0D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -642,16 +642,16 @@ TEST(Add, 4DByStatic0D) {
       .Input1Shape({})
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 2DByStatic2D) {
+TEST(Mul, 2DByStatic2D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -669,16 +669,16 @@ TEST(Add, 2DByStatic2D) {
       .Input1Shape({batch, channels})
       .Input2Shape({batch, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, channels})
       .Input2Shape({batch, channels})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 2DByStatic1D) {
+TEST(Mul, 2DByStatic1D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -696,16 +696,16 @@ TEST(Add, 2DByStatic1D) {
       .Input1Shape({channels})
       .Input2Shape({batch, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, channels})
       .Input2Shape({channels})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, 2DByStatic0D) {
+TEST(Mul, 2DByStatic0D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -723,16 +723,16 @@ TEST(Add, 2DByStatic0D) {
       .Input1Shape({})
       .Input2Shape({batch, channels})
       .Input1Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, channels})
       .Input2Shape({})
       .Input2Static(true)
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, FP16Weights) {
+TEST(Mul, FP16Weights) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -753,17 +753,17 @@ TEST(Add, FP16Weights) {
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
       .FP16Weights()
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .Input2Static(true)
       .FP16Weights()
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, SparseWeights) {
+TEST(Mul, SparseWeights) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -784,17 +784,17 @@ TEST(Add, SparseWeights) {
       .Input2Shape({batch, height, width, channels})
       .Input1Static(true)
       .SparseWeights()
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 
   BinaryElementwiseTester()
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .Input2Static(true)
       .SparseWeights()
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, ReluActivation) {
+TEST(Mul, ReluActivation) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -814,10 +814,10 @@ TEST(Add, ReluActivation) {
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .ReluActivation()
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, Relu6Activation) {
+TEST(Mul, Relu6Activation) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -837,10 +837,10 @@ TEST(Add, Relu6Activation) {
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .Relu6Activation()
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, ReluMinus1To1Activation) {
+TEST(Mul, ReluMinus1To1Activation) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -860,10 +860,10 @@ TEST(Add, ReluMinus1To1Activation) {
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .ReluMinus1To1Activation()
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, DISABLED_TanhActivation) {
+TEST(Mul, DISABLED_TanhActivation) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -883,10 +883,10 @@ TEST(Add, DISABLED_TanhActivation) {
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .TanhActivation()
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
-TEST(Add, DISABLED_SignBitActivation) {
+TEST(Mul, DISABLED_SignBitActivation) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -906,7 +906,7 @@ TEST(Add, DISABLED_SignBitActivation) {
       .Input1Shape({batch, height, width, channels})
       .Input2Shape({batch, height, width, channels})
       .SignBitActivation()
-      .Test(BuiltinOperator_ADD, webnn_delegate.get());
+      .Test(BuiltinOperator_MUL, webnn_delegate.get());
 }
 
 }  // namespace webnn

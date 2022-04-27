@@ -170,3 +170,19 @@ cc_test(
         "@com_google_googletest//:gtest",
     ],
 )
+
+cc_test(
+    name = "mul_test",
+    srcs = ["mul_test.cc"],
+    linkopts = select({
+        "//tensorflow:emscripten": EMSCRIPTEN_LINKOPTS,
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":binary_elementwise_tester",
+        ":test_main",
+        ":webnn_delegate_test_mode",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
