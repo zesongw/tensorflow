@@ -62,6 +62,7 @@ class Delegate {
         {0, "Default"}, {1, "GPU"}, {2, "CPU"}};
     std::unordered_map<uint32_t, std::string> power_preference_names = {
         {0, "Default"}, {1, "High-performance"}, {2, "Low-power"}};
+    instance_ = std::make_unique<webnn_native::Instance>();
     TFLITE_LOG_PROD_ONCE(tflite::TFLITE_LOG_INFO,
                          "Created TensorFlow Lite WebNN delegate for device"
                          " %s and power %s.",
@@ -96,6 +97,7 @@ class Delegate {
   // Set of indices of tensors with unpacked static sparse weights.
   std::unordered_set<int> static_sparse_weights_;
 
+  std::unique_ptr<webnn_native::Instance> instance_;
   wnn::ContextOptions context_options_;
 };
 
@@ -127,11 +129,9 @@ class Subgraph {
 #ifdef __EMSCRIPTEN__
     wnn::Context wnn_context = emscripten_webnn_create_context(&(delegate->context_options_));
 #else
-    std::unique_ptr<webnn_native::Instance> instance;
-    instance = std::make_unique<webnn_native::Instance>();
     WebnnProcTable backend_procs = webnn_native::GetProcs();
     webnnProcSetProcs(&backend_procs);
-    wnn::Context wnn_context = instance->CreateContext(&(delegate->context_options_));
+    wnn::Context wnn_context = delegate->instance_->CreateContext(&(delegate->context_options_));
 
 #endif
     if (!wnn_context) {
