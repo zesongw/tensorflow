@@ -346,6 +346,7 @@ class Subgraph {
     }
 
     if (any_pointers_changed) {
+      graph_inputs_ = wnn::CreateNamedInputs();
       for (int t : inputs_) {
         wnn_inputs_[t].resource.arrayBufferView.buffer = context->tensors[t].data.raw;
         wnn_inputs_[t].resource.arrayBufferView.byteLength = context->tensors[t].bytes;
@@ -353,6 +354,7 @@ class Subgraph {
         graph_inputs_.Set(name.c_str(), &wnn_inputs_[t]);
       }
 
+      graph_outputs_ = wnn::CreateNamedOutputs();
       for (int t : outputs_) {
         wnn_outputs_[t].arrayBufferView.buffer = context->tensors[t].data.raw;
         wnn_outputs_[t].arrayBufferView.byteLength = context->tensors[t].bytes;
