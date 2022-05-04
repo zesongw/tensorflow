@@ -62,6 +62,9 @@ class Delegate {
         {0, "Default"}, {1, "GPU"}, {2, "CPU"}};
     std::unordered_map<uint32_t, std::string> power_preference_names = {
         {0, "Default"}, {1, "High-performance"}, {2, "Low-power"}};
+#ifndef __EMSCRIPTEN__
+    instance_ = std::make_unique<webnn_native::Instance>();
+#endif
     TFLITE_LOG_PROD_ONCE(tflite::TFLITE_LOG_INFO,
                          "Created TensorFlow Lite WebNN delegate for device"
                          " %s and power %s.",
@@ -96,6 +99,9 @@ class Delegate {
   // Set of indices of tensors with unpacked static sparse weights.
   std::unordered_set<int> static_sparse_weights_;
 
+#ifndef __EMSCRIPTEN__
+  std::unique_ptr<webnn_native::Instance> instance_;
+#endif
   wnn::ContextOptions context_options_;
 };
 
@@ -127,11 +133,9 @@ class Subgraph {
 #ifdef __EMSCRIPTEN__
     wnn::Context wnn_context = emscripten_webnn_create_context(&(delegate->context_options_));
 #else
-    std::unique_ptr<webnn_native::Instance> instance;
-    instance = std::make_unique<webnn_native::Instance>();
     WebnnProcTable backend_procs = webnn_native::GetProcs();
     webnnProcSetProcs(&backend_procs);
-    wnn::Context wnn_context = instance->CreateContext(&(delegate->context_options_));
+    wnn::Context wnn_context = delegate->instance_->CreateContext(&(delegate->context_options_));
 
 #endif
     if (!wnn_context) {
@@ -325,24 +329,45 @@ class Subgraph {
   TfLiteStatus Prepare(TfLiteContext* context) { return kTfLiteOk; }
 
   TfLiteStatus Invoke(TfLiteContext* context) {
-    wnn::NamedInputs named_inputs = wnn::CreateNamedInputs();
-    for (int t : inputs_) {
-      wnn_inputs_[t].resource.arrayBufferView.buffer = context->tensors[t].data.raw;
-      wnn_inputs_[t].resource.arrayBufferView.byteLength = context->tensors[t].bytes;
-      std::string name = std::to_string(t);
-      named_inputs.Set(name.c_str(), &wnn_inputs_[t]);
+    bool any_pointers_changed = false;
+    for (std::pair<int, void*> io_info : externals_) {
+      const TfLiteTensor& tensor = context->tensors[io_info.first];
+      void* data_pointer = &dummy_data_;
+      if (tensor.data.raw != nullptr) {
+        data_pointer = tensor.data.raw;
+      } else {
+        if (tensor.bytes != 0) {
+          TF_LITE_KERNEL_LOG(
+              context, "unexpected null data pointer in external tensor %d",
+              io_info.first);
+          return kTfLiteError;
+        }
+      }
+      if (data_pointer != io_info.second) {
+        any_pointers_changed = true;
+        externals_[io_info.first] = data_pointer;
+      }
     }
 
-    wnn::NamedOutputs named_outputs = wnn::CreateNamedOutputs();
-    for (int t : outputs_) {
-      wnn_outputs_[t].arrayBufferView.buffer = context->tensors[t].data.raw;
-      wnn_outputs_[t].arrayBufferView.byteLength = context->tensors[t].bytes;
-      std::string name = std::to_string(t);
-      named_outputs.Set(name.c_str(), &wnn_outputs_[t]);
+    if (any_pointers_changed) {
+      graph_inputs_ = wnn::CreateNamedInputs();
+      for (int t : inputs_) {
+        wnn_inputs_[t].resource.arrayBufferView.buffer = context->tensors[t].data.raw;
+        wnn_inputs_[t].resource.arrayBufferView.byteLength = context->tensors[t].bytes;
+        std::string name = std::to_string(t);
+        graph_inputs_.Set(name.c_str(), &wnn_inputs_[t]);
+      }
+
+      graph_outputs_ = wnn::CreateNamedOutputs();
+      for (int t : outputs_) {
+        wnn_outputs_[t].arrayBufferView.buffer = context->tensors[t].data.raw;
+        wnn_outputs_[t].arrayBufferView.byteLength = context->tensors[t].bytes;
+        std::string name = std::to_string(t);
+        graph_outputs_.Set(name.c_str(), &wnn_outputs_[t]);
+      }
     }
 
-    wnn_graph_.Compute(named_inputs, named_outputs);
-
+    wnn_graph_.Compute(graph_inputs_, graph_outputs_);
     return kTfLiteOk;
   }
 
@@ -2240,10 +2265,14 @@ class Subgraph {
       : wnn_graph_(graph), inputs_(inputs), outputs_(outputs) {
     for (auto& i : inputs_) {
       wnn_inputs_[i] = {};
+      externals_[i] = nullptr;
     }
     for (auto& o : outputs_) {
       wnn_outputs_[o] = {};
+      externals_[o] = nullptr;
     }
+    graph_inputs_ = wnn::CreateNamedInputs();
+    graph_outputs_ = wnn::CreateNamedOutputs();
   }
 
   wnn::Graph wnn_graph_;
@@ -2253,6 +2282,10 @@ class Subgraph {
   std::unordered_set<int> outputs_;
   std::unordered_map<int, wnn::Input> wnn_inputs_;
   std::unordered_map<int, wnn::Resource> wnn_outputs_;
+  wnn::NamedInputs graph_inputs_;
+  wnn::NamedOutputs graph_outputs_;
+  std::unordered_map<int, void*> externals_;
+  char dummy_data_{0};
 };
 
 TfLiteIntArray* Delegate::PrepareOpsToDelegate(TfLiteContext* context) {
