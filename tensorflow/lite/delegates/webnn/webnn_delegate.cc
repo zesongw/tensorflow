@@ -62,7 +62,9 @@ class Delegate {
         {0, "Default"}, {1, "GPU"}, {2, "CPU"}};
     std::unordered_map<uint32_t, std::string> power_preference_names = {
         {0, "Default"}, {1, "High-performance"}, {2, "Low-power"}};
+#ifndef __EMSCRIPTEN__
     instance_ = std::make_unique<webnn_native::Instance>();
+#endif
     TFLITE_LOG_PROD_ONCE(tflite::TFLITE_LOG_INFO,
                          "Created TensorFlow Lite WebNN delegate for device"
                          " %s and power %s.",
@@ -97,7 +99,9 @@ class Delegate {
   // Set of indices of tensors with unpacked static sparse weights.
   std::unordered_set<int> static_sparse_weights_;
 
+#ifndef __EMSCRIPTEN__
   std::unique_ptr<webnn_native::Instance> instance_;
+#endif
   wnn::ContextOptions context_options_;
 };
 
