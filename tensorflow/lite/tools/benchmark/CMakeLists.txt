@@ -61,6 +61,19 @@ if(TFLITE_ENABLE_EXTERNAL_DELEGATE)
   )
 endif()  # TFLITE_ENABLE_EXTERNAL_DELEGATE
 
+if(TFLITE_ENABLE_WEBNN)
+  list(APPEND TFLITE_BENCHMARK_SRCS
+    ${TFLITE_SOURCE_DIR}/tools/delegates/webnn_delegate_provider.cc
+  )
+  list(APPEND TFLITE_BENCHMARK_SRCS "$ENV{WEBNN_NATIVE_DIR}/out/Release/gen/src/webnn/webnn_cpp.cpp")
+  link_directories(
+    "$ENV{WEBNN_NATIVE_DIR}"
+  )
+else()
+  set(TFLITE_BENCHMARK_CC_OPTIONS "-DTFLITE_WITHOUT_WEBNN")
+  set(TFLITE_LABEL_IMAGE_CC_OPTIONS "-DTFLITE_WITHOUT_WEBNN")
+endif()  # TFLITE_ENABLE_WEBNN
+
 if(CMAKE_SYSTEM_NAME MATCHES "Android")
   if(_TFLITE_ENABLE_NNAPI)
     list(APPEND TFLITE_BENCHMARK_SRCS
@@ -90,3 +103,17 @@ target_compile_options(benchmark_model
 target_link_libraries(benchmark_model
     ${TFLITE_BENCHMARK_LIBS}
 )
+
+if(TFLITE_ENABLE_WEBNN)
+  if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+    target_link_libraries(benchmark_model
+      $ENV{WEBNN_NATIVE_DIR}/out/Release/webnn_native.dll.lib
+      $ENV{WEBNN_NATIVE_DIR}/out/Release/webnn_proc.dll.lib
+    )
+  else()
+    target_link_libraries(benchmark_model
+      $ENV{WEBNN_NATIVE_DIR}/out/Release/libwebnn_native.so
+      $ENV{WEBNN_NATIVE_DIR}/out/Release/libwebnn_proc.so
+    )
+  endif()
+endif()

@@ -777,6 +777,9 @@ std::unique_ptr<tflite::OpResolver> BenchmarkTfLiteModel::GetOpResolver()
   } else {
     resolver = new tflite::ops::builtin::BuiltinOpResolver();
   }
+  static TfLiteRegistration reg = {nullptr, nullptr, nullptr, nullptr};
+  resolver->AddCustom("Convolution2DTransposeBias", &reg);
+
   RegisterSelectedOps(resolver);
   return std::unique_ptr<tflite::OpResolver>(resolver);
 }
