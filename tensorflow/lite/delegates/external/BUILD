@@ -45,7 +45,9 @@ tflite_cc_shared_object(
         "//tensorflow:macos": [
             "-Wl,-exported_symbols_list,$(location //tensorflow/lite/c:exported_symbols.lds)",
         ],
-        "//tensorflow:windows": [],
+        "//tensorflow:windows": [
+            "-Wl,-exported_symbols_list,$(location //tensorflow/lite/c:exported_symbols.lds)",
+        ],
         "//conditions:default": [
             "-z defs",
             "-Wl,--version-script,$(location //tensorflow/lite/c:version_script.lds)",
