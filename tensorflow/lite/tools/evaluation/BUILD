@@ -59,6 +59,12 @@ cc_library(
         "//conditions:default": [
             "//tensorflow/lite/delegates/xnnpack:xnnpack_delegate",
         ],
+    }) + select({
+        "//tensorflow:linux_armhf": [],
+        "//tensorflow:linux_s390x": [],
+        "//conditions:default": [
+            "//tensorflow/lite/delegates/webnn:webnn_delegate",
+        ],
     }),
 )
 
