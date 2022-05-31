@@ -50,7 +50,8 @@ TEST(ResizeBilinear, AlignCenters) {
       .Test(webnn_delegate.get());
 }
 
-TEST(ResizeBilinear, AlignCentersTF1X) {
+//Webnn does not support this option
+TEST(ResizeBilinear, DISABLED_AlignCentersTF1X) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -73,7 +74,8 @@ TEST(ResizeBilinear, AlignCentersTF1X) {
       .Test(webnn_delegate.get());
 }
 
-TEST(ResizeBilinear, AlignCorners) {
+//Webnn does not support this option
+TEST(ResizeBilinear, DISABLED_AlignCorners) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>

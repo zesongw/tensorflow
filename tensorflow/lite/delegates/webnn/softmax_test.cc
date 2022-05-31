@@ -25,7 +25,8 @@ limitations under the License.
 namespace tflite {
 namespace webnn {
 
-TEST(Softmax, 4D) {
+//softmax in webnn only support 2D tensor
+TEST(Softmax, DISABLED_4D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -46,7 +47,8 @@ TEST(Softmax, 4D) {
       .Test(webnn_delegate.get());
 }
 
-TEST(Softmax, 3D) {
+//softmax in webnn only support 2D tensor
+TEST(Softmax, DISABLED_3D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
@@ -81,7 +83,8 @@ TEST(Softmax, 2D) {
   SoftmaxTester().Shape({batch, channels}).Test(webnn_delegate.get());
 }
 
-TEST(Softmax, 1D) {
+//softmax in webnn only support 2D tensor
+TEST(Softmax, DISABLED_1D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
   std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
