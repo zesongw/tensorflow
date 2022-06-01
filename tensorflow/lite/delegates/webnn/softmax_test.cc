@@ -25,47 +25,6 @@ limitations under the License.
 namespace tflite {
 namespace webnn {
 
-//softmax in webnn only support 2D tensor
-TEST(Softmax, DISABLED_4D) {
-  TfLiteWebNNDelegateOptions delegate_options =
-      TfLiteWebNNDelegateOptionsDefault();
-  std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
-      webnn_delegate(TfLiteWebNNDelegateCreate(&delegate_options),
-                     TfLiteWebNNDelegateDelete);
-
-  std::random_device random_device;
-  auto rng = std::mt19937(random_device());
-  auto shape_rng =
-      std::bind(std::uniform_int_distribution<int32_t>(2, 5), std::ref(rng));
-  const auto batch = shape_rng();
-  const auto height = shape_rng();
-  const auto width = shape_rng();
-  const auto channels = shape_rng();
-
-  SoftmaxTester()
-      .Shape({batch, height, width, channels})
-      .Test(webnn_delegate.get());
-}
-
-//softmax in webnn only support 2D tensor
-TEST(Softmax, DISABLED_3D) {
-  TfLiteWebNNDelegateOptions delegate_options =
-      TfLiteWebNNDelegateOptionsDefault();
-  std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
-      webnn_delegate(TfLiteWebNNDelegateCreate(&delegate_options),
-                     TfLiteWebNNDelegateDelete);
-
-  std::random_device random_device;
-  auto rng = std::mt19937(random_device());
-  auto shape_rng =
-      std::bind(std::uniform_int_distribution<int32_t>(2, 5), std::ref(rng));
-  const auto batch = shape_rng();
-  const auto width = shape_rng();
-  const auto channels = shape_rng();
-
-  SoftmaxTester().Shape({batch, width, channels}).Test(webnn_delegate.get());
-}
-
 TEST(Softmax, 2D) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
@@ -81,50 +40,6 @@ TEST(Softmax, 2D) {
   const auto channels = shape_rng();
 
   SoftmaxTester().Shape({batch, channels}).Test(webnn_delegate.get());
-}
-
-//softmax in webnn only support 2D tensor
-TEST(Softmax, DISABLED_1D) {
-  TfLiteWebNNDelegateOptions delegate_options =
-      TfLiteWebNNDelegateOptionsDefault();
-  std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
-      webnn_delegate(TfLiteWebNNDelegateCreate(&delegate_options),
-                     TfLiteWebNNDelegateDelete);
-
-  std::random_device random_device;
-  auto rng = std::mt19937(random_device());
-  auto shape_rng =
-      std::bind(std::uniform_int_distribution<int32_t>(2, 5), std::ref(rng));
-  const auto batch = shape_rng();
-
-  SoftmaxTester().Shape({batch}).Test(webnn_delegate.get());
-}
-
-TEST(Softmax, DISABLED_Beta) {
-  TfLiteWebNNDelegateOptions delegate_options =
-      TfLiteWebNNDelegateOptionsDefault();
-  std::unique_ptr<TfLiteDelegate, decltype(&TfLiteWebNNDelegateDelete)>
-      webnn_delegate(TfLiteWebNNDelegateCreate(&delegate_options),
-                     TfLiteWebNNDelegateDelete);
-
-  std::random_device random_device;
-  auto rng = std::mt19937(random_device());
-  auto shape_rng =
-      std::bind(std::uniform_int_distribution<int32_t>(2, 5), std::ref(rng));
-  const auto batch = shape_rng();
-  const auto height = shape_rng();
-  const auto width = shape_rng();
-  const auto channels = shape_rng();
-
-  SoftmaxTester()
-      .Shape({batch, height, width, channels})
-      .Beta(0.1f)
-      .Test(webnn_delegate.get());
-
-  SoftmaxTester()
-      .Shape({batch, height, width, channels})
-      .Beta(10.0f)
-      .Test(webnn_delegate.get());
 }
 
 }  // namespace webnn

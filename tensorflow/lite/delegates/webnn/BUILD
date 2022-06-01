@@ -651,6 +651,7 @@ cc_test(
     ],
 )
 
+#Cannot test now since it has int32 input tensor
 #cc_test(
 #    name = "transpose_conv_test",
 #    srcs = ["transpose_conv_test.cc"],
