@@ -650,7 +650,7 @@ TEST(Conv2D, ReluMinus1To1Activation) {
       .Test(webnn_delegate.get());
 }
 
-//webnn_native does not support this case
+// webnn_native does not support this case
 TEST(Conv2D, DISABLED_TanhActivation) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();

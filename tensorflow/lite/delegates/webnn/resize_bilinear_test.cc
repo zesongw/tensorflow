@@ -50,7 +50,7 @@ TEST(ResizeBilinear, AlignCenters) {
       .Test(webnn_delegate.get());
 }
 
-//Webnn does not support this option. Corresponding issue:https://github.com/webmachinelearning/webnn/issues/270
+// Webnn does not support this option. Corresponding issue:https://github.com/webmachinelearning/webnn/issues/270
 TEST(ResizeBilinear, DISABLED_AlignCentersTF1X) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();
@@ -74,7 +74,7 @@ TEST(ResizeBilinear, DISABLED_AlignCentersTF1X) {
       .Test(webnn_delegate.get());
 }
 
-//Webnn does not support this option. Corresponding issue:https://github.com/webmachinelearning/webnn/issues/270
+// Webnn does not support this option. Corresponding issue:https://github.com/webmachinelearning/webnn/issues/270
 TEST(ResizeBilinear, DISABLED_AlignCorners) {
   TfLiteWebNNDelegateOptions delegate_options =
       TfLiteWebNNDelegateOptionsDefault();

@@ -651,18 +651,18 @@ cc_test(
     ],
 )
 
-#Cannot test now since it has int32 input tensor
-#cc_test(
-#    name = "transpose_conv_test",
-#    srcs = ["transpose_conv_test.cc"],
-#    linkopts = select({
-#        "//tensorflow:emscripten": EMSCRIPTEN_LINKOPTS,
-#        "//conditions:default": [],
-#    }),
-#    deps = [
-#        ":test_main",
-#        ":transpose_conv_tester",
-#        "//tensorflow/lite/delegates/webnn:webnn_delegate_test_mode",
-#        "@com_google_googletest//:gtest",
-#    ],
-#)
+# Disable this test temporarily as it contains int32 input tensor, which is not supported in WebNN at present.
+# cc_test(
+#     name = "transpose_conv_test",
+#     srcs = ["transpose_conv_test.cc"],
+#     linkopts = select({
+#         "//tensorflow:emscripten": EMSCRIPTEN_LINKOPTS,
+#         "//conditions:default": [],
+#     }),
+#     deps = [
+#         ":test_main",
+#         ":transpose_conv_tester",
+#         "//tensorflow/lite/delegates/webnn:webnn_delegate_test_mode",
+#         "@com_google_googletest//:gtest",
+#     ],
+# )
