@@ -1821,10 +1821,9 @@ class Subgraph {
       TF_LITE_ENSURE(logging_context, webnn_operands[input_tensor_id]);
       TF_LITE_ENSURE(logging_context, webnn_operands[filter_tensor_id]);
       wnn::Operand output;
-      if (fc_params->keep_num_dims || input_tensor.dims->size > 2) {
+      if (fc_params->keep_num_dims || input_tensor.dims->size != 2) {
         // Reshape input to 2D tensor
-        const int32_t n_inputs =
-            static_cast<const int32_t>(input_dims_data[input_tensor.dims->size -1]);
+        const int32_t n_inputs = input_channels;
         std::vector<int32_t> new_input_shape = {-1, n_inputs};
         wnn::Operand reshaped_input =
             builder.Reshape(webnn_operands[input_tensor_id],
