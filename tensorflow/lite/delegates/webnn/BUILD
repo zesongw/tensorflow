@@ -353,6 +353,23 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "unpack_tester",
+    testonly = 1,
+    srcs = ["unpack_tester.cc"],
+    hdrs = ["unpack_tester.h"],
+    deps = [
+        "//tensorflow/lite:framework",
+        "//tensorflow/lite:schema_fbs_version",
+        "//tensorflow/lite/c:common",
+        "//tensorflow/lite/kernels:builtin_ops",
+        "//tensorflow/lite/schema:schema_conversion_utils",
+        "//tensorflow/lite/schema:schema_fbs",
+        "@com_google_googletest//:gtest",
+        "@flatbuffers",
+    ],
+)
+
 ############################## Integration tests ###############################
 
 cc_library(
@@ -666,3 +683,18 @@ cc_test(
 #         "@com_google_googletest//:gtest",
 #     ],
 # )
+
+cc_test(
+    name = "unpack_test",
+    srcs = ["unpack_test.cc"],
+    linkopts = select({
+        "//tensorflow:emscripten": EMSCRIPTEN_LINKOPTS,
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":unpack_tester",
+        ":test_main",
+        ":webnn_delegate_test_mode",
+        "@com_google_googletest//:gtest",
+    ],
+)
