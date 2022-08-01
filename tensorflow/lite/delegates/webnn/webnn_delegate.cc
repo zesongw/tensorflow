@@ -34,7 +34,7 @@ limitations under the License.
 #include <emscripten/html5_webnn.h>
 #else
 #include <webnn/webnn_proc.h>
-#include <webnn_native/WebnnNative.h>
+#include <webnn/native/WebnnNative.h>
 #endif
 
 #include <fp16/fp16.h>
@@ -63,7 +63,7 @@ class Delegate {
     std::unordered_map<uint32_t, std::string> power_preference_names = {
         {0, "Default"}, {1, "High-performance"}, {2, "Low-power"}};
 #ifndef __EMSCRIPTEN__
-    instance_ = std::make_unique<webnn_native::Instance>();
+    instance_ = std::make_unique<::webnn::native::Instance>();
 #endif
     TFLITE_LOG_PROD_ONCE(tflite::TFLITE_LOG_INFO,
                          "Created TensorFlow Lite WebNN delegate for device"
@@ -100,7 +100,7 @@ class Delegate {
   std::unordered_set<int> static_sparse_weights_;
 
 #ifndef __EMSCRIPTEN__
-  std::unique_ptr<webnn_native::Instance> instance_;
+  std::unique_ptr<::webnn::native::Instance> instance_;
 #endif
   wnn::ContextOptions context_options_;
 };
@@ -133,7 +133,7 @@ class Subgraph {
 #ifdef __EMSCRIPTEN__
     wnn::Context wnn_context = emscripten_webnn_create_context(&(delegate->context_options_));
 #else
-    WebnnProcTable backend_procs = webnn_native::GetProcs();
+    WebnnProcTable backend_procs = ::webnn::native::GetProcs();
     webnnProcSetProcs(&backend_procs);
     wnn::Context wnn_context = delegate->instance_->CreateContext(&(delegate->context_options_));
 
@@ -323,7 +323,7 @@ class Subgraph {
       return nullptr;
     }
 
-    return new Subgraph(wnn_graph, std::move(compute_inputs), std::move(outputs));
+    return new Subgraph(wnn_context, wnn_graph, std::move(compute_inputs), std::move(outputs));
   }
 
   TfLiteStatus Prepare(TfLiteContext* context) { return kTfLiteOk; }
@@ -367,7 +367,7 @@ class Subgraph {
       }
     }
 
-    wnn_graph_.Compute(graph_inputs_, graph_outputs_);
+    wnn_context_.ComputeSync(wnn_graph_, graph_inputs_, graph_outputs_);
     return kTfLiteOk;
   }
 
@@ -2302,8 +2302,8 @@ class Subgraph {
   }
 
  private:
-  Subgraph(wnn::Graph graph, std::unordered_set<int>&& inputs, std::unordered_set<int>&& outputs)
-      : wnn_graph_(graph), inputs_(inputs), outputs_(outputs) {
+  Subgraph(wnn::Context context, wnn::Graph graph, std::unordered_set<int>&& inputs, std::unordered_set<int>&& outputs)
+      : wnn_context_(context), wnn_graph_(graph), inputs_(inputs), outputs_(outputs) {
     for (auto& i : inputs_) {
       wnn_inputs_[i] = {};
       externals_[i] = nullptr;
@@ -2317,6 +2317,7 @@ class Subgraph {
   }
 
   wnn::Graph wnn_graph_;
+  wnn::Context wnn_context_;
   // TFLite Tensor IDs == name of input/output tensors for the
   // delegated subgraph.
   std::unordered_set<int> inputs_;

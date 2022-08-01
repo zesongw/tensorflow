@@ -13,8 +13,8 @@ def _webnn_native_impl(repository_ctx):
 cc_library(
     name = "webnn-native",
     hdrs = glob([
-        "webnn-native/out/Release/gen/src/include/**/*.h",
-        "webnn-native/src/include/*/*.h"
+        "webnn-native/out/Release/gen/src/**/*.h",
+        "webnn-native/include/**/**/*.h"
     ]),
     srcs = select({
         "@bazel_tools//src/conditions:windows": glob([
@@ -32,8 +32,8 @@ cc_library(
         ]),
     }),
     includes = [
-        "webnn-native/out/Release/gen/src/include",
-        "webnn-native/src/include"
+        "webnn-native/out/Release/gen/include",
+        "webnn-native/include"
     ],
     visibility = ["//visibility:public"],
 )
