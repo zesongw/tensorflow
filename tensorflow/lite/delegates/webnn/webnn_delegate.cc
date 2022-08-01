@@ -352,10 +352,7 @@ class Subgraph {
       for (int t : outputs_) {
         std::string name = std::to_string(t);
         auto output_size = context->tensors[t].bytes / 4;
-        auto output_data = context->tensors[t].data.f;
-        emscripten::val view{emscripten::typed_memory_view(output_size, output_data)};
         auto output = emscripten::val::global("Float32Array").new_(output_size);
-        output.call<void>("set", view);
         graph_outputs_.set(name, output);
       }
     }
