@@ -263,9 +263,7 @@ class Subgraph {
         } else {
           auto data_size = context->tensors[t].bytes / 4;
           emscripten::val view{ emscripten::typed_memory_view(data_size, static_cast<const float*>(data)) };
-          auto buffer_view = emscripten::val::global("Float32Array").new_(data_size);
-          buffer_view.call<void>("set", view);
-          operand = wnn_builder.call<emscripten::val>("constant", desc, buffer_view);
+          operand = wnn_builder.call<emscripten::val>("constant", desc, view);
         }
         webnn_operands.insert(std::make_pair(t, operand));
       }
@@ -343,26 +341,20 @@ class Subgraph {
         auto input_size = context->tensors[t].bytes / 4;
         auto input_data = context->tensors[t].data.f;
         emscripten::val view{ emscripten::typed_memory_view(input_size, input_data) };
-        auto input = emscripten::val::global("Float32Array").new_(input_size);
-        input.call<void>("set", view);
-        graph_inputs_.set(name, input);
+        graph_inputs_.set(name, view);
       }
 
       graph_outputs_ = emscripten::val::object();
       for (int t : outputs_) {
         std::string name = std::to_string(t);
         auto output_size = context->tensors[t].bytes / 4;
-        auto output = emscripten::val::global("Float32Array").new_(output_size);
-        graph_outputs_.set(name, output);
+        auto output_data = context->tensors[t].data.f;
+        emscripten::val view{emscripten::typed_memory_view(output_size, output_data)};
+        graph_outputs_.set(name, view);
       }
     }
 
     wnn_graph_.call<void>("compute", graph_inputs_, graph_outputs_);
-    // Copy output data from JS to TFLite output tensors' buffer.
-    for (int t : outputs_) {
-      auto output_tmp = emscripten::convertJSArrayToNumberVector<float>(graph_outputs_[std::to_string(t)]);
-      std::memcpy(context->tensors[t].data.f, output_tmp.data(), output_tmp.size()*sizeof(float));
-    }
 
     return kTfLiteOk;
   }
@@ -1171,9 +1163,7 @@ class Subgraph {
       desc.set("dimensions", emscripten::val::array(dims));
 
       emscripten::val view{ emscripten::typed_memory_view(padding.size(), padding.data()) };
-      auto buffer_view = emscripten::val::global("Int32Array").new_(padding.size());
-      buffer_view.call<void>("set", view);
-      emscripten::val padding_operand = builder.call<emscripten::val>("constant", desc, buffer_view);
+      emscripten::val padding_operand = builder.call<emscripten::val>("constant", desc, view);
       constant_buffers.push_back(std::move(padding_buffer));
 
       TF_LITE_ENSURE(logging_context, webnn_operands.at(input_tensor_id).as<bool>());
