@@ -53,9 +53,9 @@ class Delegate {
  public:
   explicit Delegate(const TfLiteWebNNDelegateOptions* options) {
     std::unordered_map<uint32_t, std::string> device_preference_name_s = {
-        {0, "default"}, {1, "gpu"}, {2, "cpu"}};
+        {0, "auto"}, {1, "gpu"}, {2, "cpu"}};
     std::unordered_map<uint32_t, std::string> power_preference_name_s = {
-        {0, "default"}, {1, "high-performance"}, {2, "low-power"}};
+        {0, "auto"}, {1, "high-performance"}, {2, "low-power"}};
     device_preference_name_ = device_preference_name_s[options->devicePreference];
     power_preference_name_ = power_preference_name_s[options->powerPreference];
     TFLITE_LOG_PROD_ONCE(tflite::TFLITE_LOG_INFO,
@@ -124,7 +124,7 @@ class Subgraph {
     emscripten::val context_options = emscripten::val::object();
     context_options.set("devicePreference", emscripten::val(delegate->device_preference_name_));
     context_options.set("powerPreference", emscripten::val(delegate->power_preference_name_));
-    emscripten::val wnn_context = ml.call<emscripten::val>("createContext", context_options);
+    emscripten::val wnn_context = ml.call<emscripten::val>("createContextSync", context_options);
 
     if (!wnn_context.as<bool>()) {
       TF_LITE_KERNEL_LOG(context, "Failed to create WebNN context.");
@@ -303,12 +303,12 @@ class Subgraph {
       named_operands.set(name, webnn_operands.at(o));
     }
 
-    emscripten::val wnn_graph = wnn_builder.call<emscripten::val>("build", named_operands);
+    emscripten::val wnn_graph = wnn_builder.call<emscripten::val>("buildSync", named_operands);
     if (!wnn_graph.as<bool>()) {
       TF_LITE_KERNEL_LOG(context, "failed to build WebNN graph");
       return nullptr;
     }
-    return new Subgraph(wnn_graph, std::move(compute_inputs), std::move(outputs));
+    return new Subgraph(wnn_context, wnn_graph, std::move(compute_inputs), std::move(outputs));
   }
 
   TfLiteStatus Prepare(TfLiteContext* context) { return kTfLiteOk; }
@@ -354,7 +354,7 @@ class Subgraph {
       }
     }
 
-    wnn_graph_.call<void>("compute", graph_inputs_, graph_outputs_);
+    wnn_context_.call<void>("computeSync", wnn_graph_, graph_inputs_, graph_outputs_);
 
     return kTfLiteOk;
   }
@@ -2330,8 +2330,8 @@ class Subgraph {
   }
 
  private:
-  Subgraph(emscripten::val graph, std::unordered_set<int>&& inputs, std::unordered_set<int>&& outputs)
-      : wnn_graph_(graph), inputs_(inputs), outputs_(outputs) {
+  Subgraph(emscripten::val context, emscripten::val graph, std::unordered_set<int>&& inputs, std::unordered_set<int>&& outputs)
+      : wnn_context_(context), wnn_graph_(graph), inputs_(inputs), outputs_(outputs) {
     for (auto& i : inputs_) {
       externals_[i] = nullptr;
     }
@@ -2342,6 +2342,7 @@ class Subgraph {
     graph_outputs_ = emscripten::val::object();
   }
 
+  emscripten::val wnn_context_ = emscripten::val::object();
   emscripten::val wnn_graph_ = emscripten::val::object();
   // TFLite Tensor IDs == name of input/output tensors for the
   // delegated subgraph.
